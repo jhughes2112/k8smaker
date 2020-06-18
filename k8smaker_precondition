@@ -16,7 +16,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update 
 sudo apt-get install containerd.io=1.2.13-2 docker-ce=5:19.03.11~3-0~ubuntu-$(lsb_release -cs) docker-ce-cli=5:19.03.11~3-0~ubuntu-$(lsb_release -cs)
-sudo tee /etc/docker/daemon.json <<EOF
+sudo tee /etc/docker/daemon.json <<EOF >/dev/null
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
   "log-driver": "json-file",
@@ -38,7 +38,7 @@ else
    if grep -q "$SSDUUID" /etc/fstab; then
       echo "Disk is already in fstab."
    else
-      echo "UUID=$SSDUUID  $DATAFOLDER  ext4  defaults  0  2" | sudo tee -a /etc/fstab
+      echo "UUID=$SSDUUID  $DATAFOLDER  ext4  defaults  0  2" | sudo tee -a /etc/fstab >/dev/null
       echo "Added $SSD to /etc/fstab"
    fi
    sudo mount -a
@@ -47,7 +47,7 @@ fi
 # Make sure that $DATAFOLDER/docker is where things are stored rather than /var/lib/docker 
 SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock.*$%ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock -g $DATAFOLDER/docker%g' /lib/systemd/system/docker.service"
 echo "Adding $DATAFOLDER to docker working folder"
-sudo eval "$SEDCMD"
+eval "sudo $SEDCMD"
 sudo mkdir -p "$DATAFOLDER"/docker
 
 # make etcd a symlink to the data folder
@@ -57,13 +57,13 @@ sudo ln -s "$DATAFOLDER"/etcd /var/lib/etcd
 if grep -q "$CONTROLNODEIP control-nodes" /etc/hosts; then
    echo "/etc/hosts already setup"
 else
-   echo "$CONTROLNODEIP control-nodes" | sudo tee -a /etc/hosts
+   echo "$CONTROLNODEIP control-nodes" | sudo tee -a /etc/hosts >/dev/null
    echo "Added $CONTROLNODEIP control-nodes entry to /etc/hosts"
 fi
 
 # Performance improves if you disable Transparent Huge Pages.
 sudo apt-get install -y hugepages
-sudo tee /etc/rc.local <<EOF
+sudo tee /etc/rc.local <<EOF >/dev/null
 #!/bin/bash
 hugeadm --thp-never
 EOF
@@ -75,15 +75,15 @@ sudo swapoff -a >/dev/null 2>&1 || true
 sudo sed -i '/^\/swapfile/s/^/#/' /etc/fstab
 
 # Configure prerequisites for Kubernetes
-sudo tee /etc/sysctl.d/k8s.conf <<EOF
+sudo tee /etc/sysctl.d/k8s.conf <<EOF >/dev/null
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 EOF
-sysctl --system
+sudo sysctl --system
 
 sudo apt-get install -y apt-transport-https
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo tee /etc/apt/sources.list.d/kubernetes.list <<EOF
+sudo tee /etc/apt/sources.list.d/kubernetes.list <<EOF >/dev/null
 deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 
@@ -96,4 +96,4 @@ sudo systemctl enable docker
 sudo systemctl restart kubelet
 
 # Add tab completion to bash for kubectl
-kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl
+kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl >/dev/null

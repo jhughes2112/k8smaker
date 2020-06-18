@@ -19,7 +19,7 @@ sleep 5
 # Generate an ssh key just for connecting to other nodes and managing their startup
 mkdir –p $HOME/.ssh
 chmod 0700 $HOME/.ssh
-ssh-keygen -t rsa -f $HOME/.ssh/k8smaker -N ''
+ssh-keygen -t rsa -f $HOME/.ssh/k8smaker -N '' <<< y
 
 source ./k8smaker_precondition
 
@@ -125,7 +125,7 @@ SEDCMD="sed -i 's%PODSUBNET%$PODSUBNET%g' ./kubeadm.yaml"
 eval "$SEDCMD"
 
 # Actually create the cluster with just the control,etcd on this node.
-kubeadm init --config=./kubeadm.yaml --upload-certs
+sudo kubeadm init --config=./kubeadm.yaml --upload-certs
 
 # Configure kubectl to talk to the local cluster in your user login.
 mkdir -p $HOME/.kube
@@ -143,20 +143,22 @@ SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoint
 eval "$SEDCMD"
 
 ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' ./calico.yaml
+SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' ./calico.yaml"
 eval "$SEDCMD"
 
 ETCDCERT=$(sudo cat /etc/kubernetes/pki/etcd/peer.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' ./calico.yaml
+SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' ./calico.yaml"
 eval "$SEDCMD"
 
 ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' ./calico.yaml
+SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' ./calico.yaml"
 eval "$SEDCMD"
 
+echo "Installing Calico"
 kubectl apply -f ./calico.yaml
 
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.2 sh -
+echo "Installing Istio"
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.2 sh - >/dev/null
 istio-1.6.2/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
 kubectl label namespace default istio-injection=enabled
