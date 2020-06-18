@@ -16,7 +16,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update 
 sudo apt-get install containerd.io=1.2.13-2 docker-ce=5:19.03.11~3-0~ubuntu-$(lsb_release -cs) docker-ce-cli=5:19.03.11~3-0~ubuntu-$(lsb_release -cs)
-sudo cat > /etc/docker/daemon.json <<EOF
+sudo tee /etc/docker/daemon.json <<EOF
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
   "log-driver": "json-file",
@@ -38,7 +38,7 @@ else
    if grep -q "$SSDUUID" /etc/fstab; then
       echo "Disk is already in fstab."
    else
-      sudo echo "UUID=$SSDUUID  $DATAFOLDER  ext4  defaults  0  2" >>/etc/fstab
+      echo "UUID=$SSDUUID  $DATAFOLDER  ext4  defaults  0  2" | sudo tee -a /etc/fstab
       echo "Added $SSD to /etc/fstab"
    fi
    sudo mount -a
@@ -57,13 +57,13 @@ sudo ln -s "$DATAFOLDER"/etcd /var/lib/etcd
 if grep -q "$CONTROLNODEIP control-nodes" /etc/hosts; then
    echo "/etc/hosts already setup"
 else
-   sudo echo "$CONTROLNODEIP control-nodes" >>/etc/hosts
+   echo "$CONTROLNODEIP control-nodes" | sudo tee -a /etc/hosts
    echo "Added $CONTROLNODEIP control-nodes entry to /etc/hosts"
 fi
 
 # Performance improves if you disable Transparent Huge Pages.
 sudo apt-get install -y hugepages
-sudo cat >/etc/rc.local <<EOF
+sudo tee /etc/rc.local <<EOF
 #!/bin/bash
 hugeadm --thp-never
 EOF
@@ -72,10 +72,10 @@ sudo hugeadm --thp-never
 
 # Swapfile must be off to run k8s properly
 sudo swapoff -a >/dev/null 2>&1 || true
-sed -i '/^\/swapfile/s/^/#/' /etc/fstab
+sudo sed -i '/^\/swapfile/s/^/#/' /etc/fstab
 
 # Configure prerequisites for Kubernetes
-sudo cat >/etc/sysctl.d/k8s.conf <<EOF
+sudo tee /etc/sysctl.d/k8s.conf <<EOF
 net.bridge.bridge-nf-call-ip6tables = 1
 net.bridge.bridge-nf-call-iptables = 1
 EOF
@@ -83,7 +83,7 @@ sysctl --system
 
 sudo apt-get install -y apt-transport-https
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo cat >/etc/apt/sources.list.d/kubernetes.list <<EOF
+sudo tee /etc/apt/sources.list.d/kubernetes.list <<EOF
 deb https://apt.kubernetes.io/ kubernetes-xenial main
 EOF
 
@@ -96,4 +96,4 @@ sudo systemctl enable docker
 sudo systemctl restart kubelet
 
 # Add tab completion to bash for kubectl
-sudo kubectl completion bash >/etc/bash_completion.d/kubectl
+kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl

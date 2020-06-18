@@ -27,7 +27,7 @@ sleep 5
 ssh-copy-id "$SSHUSERNAME"@"$1" -f $HOME/.ssh/k8skey.pub
 
 # generate the script we want to run on the remote machine
-cp ./k8smaker_precondition ./k8smaker_"$1"
+cp -f ./k8smaker_precondition ./k8smaker_"$1"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
 echo "kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>./k8smaker_"$1"
 
