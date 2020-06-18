@@ -1,0 +1,39 @@
+#!/bin/bash
+
+if [[ $(whoami) == "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+source ./k8smaker_config
+
+if [[ $1 == '' ]]; then
+   echo "Pass IP or hostname of the worker node as the first argument:"
+   echo "./k8smaker_addworker worker1.local"
+   exit 1
+fi
+
+# this picks up your external facing IP address and FQDN hostname
+CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
+FQDNHOSTNAME=$(hostname -f)
+echo "ControlNode1 is $FQDNHOSTNAME at IP $CONTROLNODEIP"
+echo "Worker is $SSHUSERNAME@$1"
+
+# Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
+echo "You have 5 seconds before this script remotely deletes all Kubernetes and Etcd data.  Control-C To Abort!"
+sleep 5
+
+# configure us to be able to login remotely without a password
+ssh-copy-id "$SSHUSERNAME"@"$1" -f $HOME/.ssh/k8skey.pub
+
+# generate the script we want to run on the remote machine
+cp ./k8smaker_precondition ./k8smaker_"$1"
+DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
+echo "kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>./k8smaker_"$1"
+
+# copy the script to the new node and run it
+scp ./k8smaker_"$1" "$SSHUSERNAME"@"$1":~
+ssh "$SSHUSERNAME"@"$1" "~/k8smaker_$1"
+
+# give the new node the role of 'worker'
+kubectl label nodes "$1" node-role.kubernetes.io/worker=

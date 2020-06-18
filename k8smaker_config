@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# If you have an SSD device, declare it here and the script will make sure it's mounted
+# in the right place. It's your job to make sure it's partitioned (use parted) and 
+# formatted (use mkfs.ext4) first.  I don't do this, so as not to risk other data on the device.
+SSD="/dev/nvme0n1"
+
+# Even if you have no SSD, this is the root of where Docker and etcd data will live.
+DATAFOLDER="/mnt/nvme"
+
+# This script doesn't use a randomized bootstrap token, nor does it expire.  Slight security issue.
+# Definitely change this, but it must be EXACTLY this many letters long.
+BOOTSTRAPTOKEN="secret.bootstraptokenxx"
+
+# To select your cluster, you do this: kubectl config use-context CLUSTERNAME
+CLUSTERNAME="metalgods"
+
+# Can be any subnet, but CLUSTERDNS needs to be on the SERVICESUBNET
+SERVICESUBNET="10.99.0.0/16"
+CLUSTERDNS="10.99.0.10"
+
+# Can be any subnet, probably non-routable only.  Google up "non-routable ip addresses"
+PODSUBNET="10.98.0.0/16"
+
+# This is the username used when SSH'ing into machines
+SSHUSERNAME="jhughes"

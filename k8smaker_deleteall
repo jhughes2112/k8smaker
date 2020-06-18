@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [[ $(whoami) == "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+# DELETES AND REMOVES ALL k8s and docker libraries and data.  Do not run this on a machine that has stuff you care about.
+echo "You have 5 seconds before this script deletes all Kubernetes, Docker and Etcd data.  Control-C To Abort!"
+sleep 5
+
+# Get rid of anything that might cause conflicts, old versions, etc
+sudo systemctl stop kubelet
+docker stop $(docker ps -q)
+docker rm $(docker ps -aq)
+sudo systemctl stop docker
+sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker
+sudo apt-get remove docker docker-engine containerd.io docker-ce docker-ce-cli docker.io containerd runc >/dev/null 2>&1 || true

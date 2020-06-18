@@ -1,0 +1,162 @@
+#!/bin/bash
+
+if [[ $(whoami) == "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+source ./k8smaker_config
+
+# this picks up your external facing IP address and FQDN hostname
+CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
+FQDNHOSTNAME=$(hostname -f)
+echo "Using $FQDNHOSTNAME at IP $CONTROLNODEIP"
+
+# Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
+echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
+sleep 5
+
+# Generate an ssh key just for connecting to other nodes and managing their startup
+mkdir –p $HOME/.ssh
+chmod 0700 $HOME/.ssh
+ssh-keygen -t rsa -f $HOME/.ssh/k8smaker -N ''
+
+source ./k8smaker_precondition
+
+# Note, the bootstrap token is insecure because it's not randomized nor does it expire (ttl).
+cat >./kubeadm.yaml <<EOF
+kind: InitConfiguration
+apiVersion: kubeadm.k8s.io/v1beta2
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: BOOTSTRAPTOKEN
+  ttl: 0s
+  usages:
+  - signing
+  - authentication
+localAPIEndpoint:
+  advertiseAddress: CONTROLNODEIP
+  bindPort: 6443
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  name: FQDNHOSTNAME
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+---
+kind: ClusterConfiguration
+apiServer:
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta2
+certificatesDir: /etc/kubernetes/pki
+clusterName: CLUSTERNAME
+controllerManager: {}
+dns:
+  type: CoreDNS
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+imageRepository: k8s.gcr.io
+kubernetesVersion: v1.18.4
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: SERVICESUBNET
+  podSubnet: PODSUBNET
+controlPlaneEndpoint: control-nodes
+scheduler: {}
+---
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    cacheTTL: 0s
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+authorization:
+  mode: Webhook
+  webhook:
+    cacheAuthorizedTTL: 0s
+    cacheUnauthorizedTTL: 0s
+clusterDNS:
+- CLUSTERDNS
+clusterDomain: cluster.local
+cpuManagerReconcilePeriod: 0s
+evictionPressureTransitionPeriod: 0s
+fileCheckFrequency: 0s
+healthzBindAddress: 127.0.0.1
+healthzPort: 10248
+httpCheckFrequency: 0s
+imageMinimumGCAge: 0s
+nodeStatusReportFrequency: 0s
+nodeStatusUpdateFrequency: 0s
+rotateCertificates: true
+runtimeRequestTimeout: 0s
+staticPodPath: /etc/kubernetes/manifests
+streamingConnectionIdleTimeout: 0s
+syncFrequency: 0s
+volumeStatsAggPeriod: 0s
+cgroupDriver: systemd
+EOF
+
+# Replace some entries in the init script with actual values
+SEDCMD="sed -i 's%BOOTSTRAPTOKEN%$BOOTSTRAPTOKEN%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%CONTROLNODEIP%$CONTROLNODEIP%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%FQDNHOSTNAME%$FQDNHOSTNAME%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%CLUSTERNAME%$CLUSTERNAME%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%SERVICESUBNET%$SERVICESUBNET%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%CLUSTERDNS%$CLUSTERDNS%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+SEDCMD="sed -i 's%PODSUBNET%$PODSUBNET%g' ./kubeadm.yaml"
+eval "$SEDCMD"
+
+# Actually create the cluster with just the control,etcd on this node.
+kubeadm init --config=./kubeadm.yaml --upload-certs
+
+# Configure kubectl to talk to the local cluster in your user login.
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+sudo usermod -aG docker $(id -u)
+
+# Install Calico w/etcd for networking
+curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o ./calico.yaml
+sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/etcd-ca"%g' ./calico.yaml
+sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' ./calico.yaml
+sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' ./calico.yaml
+
+SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g ./calico.yaml"
+eval "$SEDCMD"
+
+ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' ./calico.yaml
+eval "$SEDCMD"
+
+ETCDCERT=$(sudo cat /etc/kubernetes/pki/etcd/peer.crt | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' ./calico.yaml
+eval "$SEDCMD"
+
+ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' ./calico.yaml
+eval "$SEDCMD"
+
+kubectl apply -f ./calico.yaml
+
+# Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.2 sh -
+istio-1.6.2/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
+kubectl label namespace default istio-injection=enabled
