@@ -19,7 +19,7 @@ At least in my case, I have machines that boot to a slow drive and a really fast
  - pods run on worker nodes
  -- Use beefy machines for these
  - **Calico** for networking automatically configured to talk to secured etcd
- - **Istio 1.6.2** for ingress and mesh routing
+ - **Istio 1.6.3** for ingress and mesh routing
 
 ## Some parts run as Root
 Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
