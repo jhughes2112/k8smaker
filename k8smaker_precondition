@@ -7,9 +7,15 @@ if [[ $(whoami) == "root" ]]; then
    exit 1
 fi
 
-# Get rid of anything that might cause conflicts, old versions, etc
-sudo systemctl stop kubelet
-sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet
+if [[ $SSD == '' ]]; then
+   echo "Do not run this directly.  This is used by other scripts."
+   exit 1;
+fi
+
+# Get onto a K8s and Docker version that will play nice together.
+if command kubelet 2>/dev/null; then
+   sudo systemctl stop kubelet
+fi
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg2 gnupg-agent
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
@@ -89,10 +95,13 @@ EOF
 
 # Check current versions available of these packages like this: apt-cache madison kubelet 
 sudo apt-get update
+sudo apt-mark unhold kubelet kubeadm kubectl
+sudo apt-get purge -y kubelet kubeadm kubectl
+sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet
 sudo apt-get install -y kubelet=1.18.4-00 kubeadm=1.18.4-00 kubectl=1.18.4-00
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl daemon-reload
-sudo systemctl start docker
+sudo systemctl restart docker
 sudo systemctl enable docker
 sudo systemctl restart kubelet
 

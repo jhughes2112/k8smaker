@@ -160,5 +160,5 @@ kubectl apply -f ./calico.yaml
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
 echo "Installing Istio"
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.2 sh - >/dev/null
-istio-1.6.2/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
+./istio-1.6.2/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
 kubectl label namespace default istio-injection=enabled
