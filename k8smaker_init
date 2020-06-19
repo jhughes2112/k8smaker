@@ -17,7 +17,7 @@ echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data
 sleep 5
 
 # Generate an ssh key just for connecting to other nodes and managing their startup
-mkdir –p $HOME/.ssh
+mkdir -p $HOME/.ssh
 chmod 0700 $HOME/.ssh
 ssh-keygen -t rsa -f $HOME/.ssh/k8smaker -N '' <<< y
 

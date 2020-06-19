@@ -14,5 +14,7 @@ sudo systemctl stop kubelet
 docker stop $(docker ps -q)
 docker rm $(docker ps -aq)
 sudo systemctl stop docker
-sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker
-sudo apt-get remove docker docker-engine containerd.io docker-ce docker-ce-cli docker.io containerd runc >/dev/null 2>&1 || true
+sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli containerd runc containerd.io >/dev/null 2>&1
+sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce  
+sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker /etc/docker /var/run/docker.sock
+sudo groupdel docker

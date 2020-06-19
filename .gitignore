@@ -1,0 +1,3 @@
+kubeadm.yaml
+calico.yaml
+istioctl-1.6.2
