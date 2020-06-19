@@ -129,9 +129,9 @@ sudo kubeadm init --config=./kubeadm.yaml --upload-certs
 
 # Configure kubectl to talk to the local cluster in your user login.
 mkdir -p $HOME/.kube
-sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
-sudo usermod -aG docker $(id -u)
+sudo usermod -aG docker $USER
 
 # Install Calico w/etcd for networking
 curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o ./calico.yaml
@@ -139,7 +139,7 @@ sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/et
 sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' ./calico.yaml
 sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' ./calico.yaml
 
-SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g ./calico.yaml"
+SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g' ./calico.yaml"
 eval "$SEDCMD"
 
 ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
