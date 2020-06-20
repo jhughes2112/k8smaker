@@ -45,3 +45,7 @@ You run this on the `control-node`, passing it the IP or hostname of the worker 
 
 ## Some parts run as Root
 Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
+
+## TODO
+- Add a script to remove a node from the cluster and wipe it clean.
+- Add a script to add an etcd,control node to the cluster, or change init to start with a 1-, 3- or 5-node control plane.
