@@ -41,9 +41,9 @@ localAPIEndpoint:
 nodeRegistration:
   criSocket: /var/run/dockershim.sock
   name: FQDNHOSTNAME
-  taints:
-  - effect: NoSchedule
-    key: node-role.kubernetes.io/master
+#  taints:
+#  - effect: NoSchedule
+#    key: node-role.kubernetes.io/master
 ---
 kind: ClusterConfiguration
 apiServer:
