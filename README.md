@@ -1,15 +1,19 @@
 
 # k8smaker
-A fully scripted Kubernetes deployment
+Automating all the things!
 
-This is a personal project to make it easier to setup a Kubernetes cluster from scratch, fully ready to launch pods.  It's a single-command deployment by way of Bash script that simply and cleanly arranges the prerequisites for K8s, allows for an explicit data folder where `etcd` and `Docker` data are stored, and a few other conveniences.  If you have read many of the walkthroughs on installing Kubernetes manually, this is pretty much all of those steps and suggestions smashed together and fully automated.
+This is a personal project to make it easier to stand up a Kubernetes cluster from a fresh install of Ubuntu.  The number of times I have done these dozens of steps, I cannot count.  Rather than keep the cheat sheet of commands with me, I wrote this set of scripts so I can essentially wipe out a machine, pull down this repo, and launch the **k8smaker_init** script and BAM, Kubernetes cluster on one machine.
 
-All these scripts are intended to run from the first machine in the k8s cluster, which we'll call `control-node1`.  It sets up an ssh key on initialization and copies it to the other nodes so it can poke in the appropriate script and join them to the cluster.
+Furthermore, the documentation for all the things you should do to setup a machine is fairly scattered.  Every step is important, of course, but if you have read some of the walkthroughs on installing Kubernetes, most of them include relatively few of the preconditioning steps. The **k8smaker_precondition** script runs on every machine, so if there's anything you need to add to it, fork and have at it.  Send me a PR if it's something everyone should do--I'm sure I missed some things.
 
-At least in my case, I have some bare metal machines that boot from a slow drive, but there's a really fast NVME drive that I want everything to be stored on, for obvious reasons.  **k8smaker** lets you specify a block device that gets auto-mounted to the data folder you specified, and makes Docker and etcd data live underneath that point.  You can obviously also use that space for storage volumes or bind mounts or whatever, too.
+# Usage
+- All these scripts are intended to run from the first machine in the k8s cluster, which we'll call `control-node`.  
+- Take a moment to edit **k8smaker_config** to change the name of the cluster, the bootstrap token, and anything else you want.  
+- If you have an existing Docker install with things running that you care about **do not run these scripts**. They uninstall and reinstall with wild abandon.  In particular, **k8smaker_deleteall** lives up to its name and will aggressively destroy data.
+- Run **k8smaker_init** and that node will become the `control-node`.  It will be etcd,control,worker initially.
+- If you want more nodes in your cluster, run **k8smaker_addworker <ip/machine-name>** and it will be added to the cluster.  At that time, the `control-node` will revert back to just etcd,control if you have it set to do so in the config file.
 
 ## Cluster Configuration
-
  - Kubernetes 1.18.4
  - Ubuntu 18.04LTS
  - Bare metal or anything else
@@ -21,11 +25,7 @@ At least in my case, I have some bare metal machines that boot from a slow drive
  - **Calico** for networking automatically configured to talk to secured etcd
  - **Istio 1.6.3** for ingress and mesh routing
 
-## Some parts run as Root
-Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
-
 ## Prerequisites for k8smaker
-
  - All nodes need to be a `systemd`-based Ubuntu 18.04LTS (or similar Debian distro)
  - All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/) installed so `control-node1` can configure them
  - All nodes need the same username (often `ubuntu` but can be anything)
@@ -33,8 +33,15 @@ Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` bas
 ## k8smaker_config
 Edit this file to set your cluster name, username, etc.  This is shared across all the scripts.  See comments for what each variable means.
 
+In my case, I run on bare metal that boots from a slow drive, but have fast data drives.  So this script allows me to configure the device to mount at the data folder location.  If this doesn't apply to you, point it at anything other than a block device and it'll skip that part.  You still want to provide it a root folder for all the data, since /var/lib/docker and /var/lib/etcd get mapped there.
+
 ## k8smaker_init
-You run this on the `control-node1` to prep the machine, which configures apt, installs a few packages it needs to do the install like curl, docker, kubeadm, kubectl, kubelet, etc.  Several .yaml files are generated by this process and are dropping in the local directory before being applied, for your perusal.  A number of OS-level files are tweaked as well, but in an idempotent way.  Be aware, if you run this a second time, it **destroys any previous k8s cluster** and builds you a new one.  If you have any etcd data or docker volumes you want to preserve, copy them somewhere else first.  For your information, Istio does not install to control nodes, only worker nodes, so in order for it to properly install, the `control-node1` is untainted to a full worker+control+etcd node to facilitate simple installation and testing.  If you want the control node to also be a worker, this is fine, but if not, there's a variable in the k8smaker_config that changes `control-node1` back to just control+etcd when you join the first worker to the cluster.
+You run this on the machine you want to be the `control-node`.  This script preps the machine, which configures apt, installs a few packages it needs to do the install like curl, docker, kubeadm, kubectl, kubelet, etc.  Several .yaml files are generated by this process and scattered across the file system.  All changes are attempted to be made in a way that it is non-harmful to run a second time, if you need to blow away the cluster and start again, without reinstalling the OS.  Be aware, that running it a second time **destroys any existing k8s cluster** and builds you a new one.  If you have any etcd data or docker volumes you want to preserve, copy them somewhere else first.  
+
+One little quirk is that Istio does not complete installation to just control nodes, as some of the pods require scheduling onto  worker nodes.  In order for this configuration to be a fully working cluster on a single node, this script leaves the `control-node` as a full etcd,control,worker role.  There's a setting in the config file to convert it to etcd,control when the first worker node is added.
 
 ## k8smaker_addworker
-You run this on the `control-node1`, passing it the hostname of the worker node to be added to the cluster.  It generates a Bash script into the local directory with the hostname embedded in it, copies an ssh key to the remote machine, then remote executes the script on that hostname.  This gives you complete visibility on what it's running.
+You run this on the `control-node`, passing it the IP or hostname of the worker node to be added to the cluster.  First, it generates a Bash script called **k8smaker_worker_(hostname)** into the local directory so you can inspect what it's doing.  The script then configures the new node with an ssh key, copies the customized Bash script over, then remote executes it.  You will probably need to accept the SSH signature, provide the password the first time to ssh, then give the password to allow sudo access, since some commands require root to configure the machine.
+
+## Some parts run as Root
+Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
