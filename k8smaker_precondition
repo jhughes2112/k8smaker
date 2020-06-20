@@ -16,6 +16,9 @@ fi
 if command kubelet 2>/dev/null; then
    sudo systemctl stop kubelet
 fi
+sudo apt-mark unhold kubelet kubeadm kubectl
+sudo apt-get purge -y kubelet kubeadm kubectl
+sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common gnupg2 gnupg-agent
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
@@ -34,27 +37,30 @@ sudo tee /etc/docker/daemon.json <<EOF >/dev/null
 EOF
 sudo mkdir -p /etc/systemd/system/docker.service.d
 
+# Make sure $DATAFOLDER exists
+sudo mkdir -p "$DATAFOLDER"
+sudo mkdir -p "$DATAFOLDER"/docker
+sudo mkdir -p "$DATAFOLDER"/etcd
+sudo ln -s "$DATAFOLDER"/etcd /var/lib/etcd
+
 # If there's a device at $SSD, we set it up to mount at the DATAFOLDER location.
-if [[ -f $SSD ]]; then
-   echo "$SSD not found"
-else
-   SSDUUID=$(lsblk $SSD -o UUID -n | tr '\n' ' ' | cut -c 2-37)
-   echo "Found $SSDUUID"
-   sudo mkdir -p "$DATAFOLDER"
+if [[ -b "$SSD" ]]; then
+   SSDUUID=$(lsblk "$SSD" -o UUID -n | tr '\n' ' ' | cut -c 2-37)
+   echo "Found $SSD as $SSDUUID"
+
    if grep -q "$SSDUUID" /etc/fstab; then
-      echo "Disk is already in fstab."
+      echo "Disk is already in /etc/fstab."
    else
       echo "UUID=$SSDUUID  $DATAFOLDER  ext4  defaults  0  2" | sudo tee -a /etc/fstab >/dev/null
       echo "Added $SSD to /etc/fstab"
    fi
-   sudo mount -a
+   sudo mount "$DATAFOLDER"
 fi
 
 # Make sure that $DATAFOLDER/docker is where things are stored rather than /var/lib/docker 
 SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock.*$%ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock -g $DATAFOLDER/docker%g' /lib/systemd/system/docker.service"
 echo "Adding $DATAFOLDER to docker working folder"
 eval "sudo $SEDCMD"
-sudo mkdir -p "$DATAFOLDER"/docker
 
 # add a DNS entry so we can do HA control node load balancing if we want to later.
 if grep -q "$CONTROLNODEIP control-nodes" /etc/hosts; then
@@ -92,16 +98,8 @@ EOF
 
 # Check current versions available of these packages like this: apt-cache madison kubelet 
 sudo apt-get update
-sudo apt-mark unhold kubelet kubeadm kubectl
-sudo apt-get purge -y kubelet kubeadm kubectl
-sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet
 sudo apt-get install -y kubelet=1.18.4-00 kubeadm=1.18.4-00 kubectl=1.18.4-00
 sudo apt-mark hold kubelet kubeadm kubectl
-
-# make etcd a symlink to the data folder
-sudo ln -s "$DATAFOLDER"/etcd /var/lib/etcd
-sudo mkdir -p "$DATAFOLDER"/etcd"
-
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 sudo systemctl enable docker

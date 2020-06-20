@@ -1,11 +1,13 @@
 #!/bin/bash
 
 # If you have an SSD device, declare it here and the script will make sure it's mounted
-# in the right place. It's your job to make sure it's partitioned (use parted) and 
-# formatted (use mkfs.ext4) first.  I don't do this, so as not to risk other data on the device.
+# whereever DATAFOLDER isi.  It's your job to make sure it's partitioned (use parted) and 
+# formatted (use mkfs.ext4) first.  I don't do thisi for you, in case there's other stuff
+# on the drive already.
 SSD="/dev/nvme0n1"
 
 # Even if you have no SSD, this is the root of where Docker and etcd data will live.
+# You must specify this folder to be SOMEWHERE, as /docker and /etcd are mounted beneath it.
 DATAFOLDER="/mnt/nvme"
 
 # This script doesn't use a randomized bootstrap token, nor does it expire.  Slight security issue.
@@ -24,3 +26,6 @@ PODSUBNET="10.98.0.0/16"
 
 # This is the username used when SSH'ing into machines
 SSHUSERNAME="jhughes"
+
+# Here you control whether you want control-node1 to also be a worker. 0 means no.
+CONTROLISWORKER=1

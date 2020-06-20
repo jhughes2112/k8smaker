@@ -5,9 +5,14 @@ if [[ $(whoami) == "root" ]]; then
    exit 1
 fi
 
+source ./k8smaker_config
+
 # DELETES AND REMOVES ALL k8s and docker libraries and data.  Do not run this on a machine that has stuff you care about.
 echo "You have 5 seconds before this script deletes all Kubernetes, Docker and Etcd data.  Control-C To Abort!"
 sleep 5
+
+# First, let kubeadm have a go at it.
+sudo kubeadm reset -f
 
 # Get rid of anything that might cause conflicts, old versions, etc
 if command kubelet 2>/dev/null; then
@@ -22,5 +27,8 @@ sudo apt-mark unhold kubelet kubeadm kubectl
 sudo apt-get purge -y kubelet kubeadm kubectl
 sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli containerd runc containerd.io >/dev/null 2>&1
 sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce  
-sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker /etc/docker /var/run/docker.sock
+sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker /etc/docker /var/run/docker.sock /etc/cni/net.d
+if [[ -f $DATAFOLDER ]]; then
+   sudo rm -rf "$DATAFOLDER"/etcd "$DATAFOLDER"/docker
+fi
 sudo groupdel docker

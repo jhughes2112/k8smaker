@@ -37,3 +37,8 @@ ssh "$SSHUSERNAME"@"$1" "~/k8smaker_$1"
 
 # give the new node the role of 'worker'
 kubectl label nodes "$1" node-role.kubernetes.io/worker=
+
+# Once you add a worker node, we mark the control plane as non-schedulable, since we specified for it to not handle work.
+if [[ "$CONTROLISWORKER" -eq "0" ]]; then
+   kubectl label nodes "$FQDNHOSTNAME" node-role.kubernetes.io/master=:NoSchedule
+fi
