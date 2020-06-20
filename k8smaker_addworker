@@ -13,32 +13,51 @@ if [[ $1 == '' ]]; then
    exit 1
 fi
 
-# this picks up your external facing IP address and FQDN hostname
+# this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-FQDNHOSTNAME=$(hostname -f)
-echo "ControlNode1 is $FQDNHOSTNAME at IP $CONTROLNODEIP"
+THISHOSTNAME=$(hostname)
+ADDSCRIPT="k8smaker_worker_$1"
+echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
 echo "Worker is $SSHUSERNAME@$1"
+echo "Script stored in $ADDSCRIPT"
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
 echo "You have 5 seconds before this script remotely deletes all Kubernetes and Etcd data.  Control-C To Abort!"
 sleep 5
 
 # configure us to be able to login remotely without a password
-ssh-copy-id "$SSHUSERNAME"@"$1" -f $HOME/.ssh/k8skey.pub
+ssh-copy-id -f -i $HOME/.ssh/k8smaker.pub "$SSHUSERNAME"@"$1"
 
 # generate the script we want to run on the remote machine
-cp -f ./k8smaker_precondition ./k8smaker_"$1"
+echo "#!/bin/bash" >"$ADDSCRIPT"
+echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
+cat ./k8smaker_config >>"$ADDSCRIPT"
+cat ./k8smaker_precondition >>"$ADDSCRIPT"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
-echo "kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>./k8smaker_"$1"
+echo "sudo kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>"$ADDSCRIPT"
+echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
+echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
+chmod a+x "$ADDSCRIPT"
 
 # copy the script to the new node and run it
-scp ./k8smaker_"$1" "$SSHUSERNAME"@"$1":~
-ssh "$SSHUSERNAME"@"$1" "~/k8smaker_$1"
+scp -i $HOME/.ssh/k8smaker "$ADDSCRIPT" "$SSHUSERNAME"@"$1":"~/$ADDSCRIPT"
+ssh -t -i $HOME/.ssh/k8smaker "$SSHUSERNAME"@"$1" "~/$ADDSCRIPT"
+
+# Configure kubectl for each worker node
+scp -i $HOME/.ssh/k8smaker ~/.kube/config "$SSHUSERNAME"@"$1":~/.kube/config
 
 # give the new node the role of 'worker'
-kubectl label nodes "$1" node-role.kubernetes.io/worker=
+kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/worker="
 
 # Once you add a worker node, we mark the control plane as non-schedulable, since we specified for it to not handle work.
 if [[ "$CONTROLISWORKER" -eq "0" ]]; then
-   kubectl label nodes "$FQDNHOSTNAME" node-role.kubernetes.io/master=:NoSchedule
+   echo "$THISHOSTNAME will no longer be a worker."
+   kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master=NoSchedule"
+   kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master='':NoSchedule
+else
+   echo "$THISHOSTNAME will stay as a worker."
+   kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master="
+   if kubectl get node/"$THISHOSTNAME" -o custom-columns=TAINTS:.spec.taints --no-headers | grep -q "node-role.kubernetes.io/master"; then
+      kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master:NoSchedule-
+   fi
 fi

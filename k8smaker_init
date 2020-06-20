@@ -7,10 +7,10 @@ fi
 
 source ./k8smaker_config
 
-# this picks up your external facing IP address and FQDN hostname
+# this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-FQDNHOSTNAME=$(hostname -f)
-echo "Using $FQDNHOSTNAME at IP $CONTROLNODEIP"
+THISHOSTNAME=$(hostname)
+echo "Using $THISHOSTNAME at IP $CONTROLNODEIP"
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
 echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
@@ -40,7 +40,6 @@ localAPIEndpoint:
   bindPort: 6443
 nodeRegistration:
   criSocket: /var/run/dockershim.sock
-  name: FQDNHOSTNAME
   taints:
   - effect: NoSchedule
     key: node-role.kubernetes.io/master
@@ -109,9 +108,6 @@ eval "$SEDCMD"
 SEDCMD="sed -i 's%CONTROLNODEIP%$CONTROLNODEIP%g' ./kubeadm.yaml"
 eval "$SEDCMD"
 
-SEDCMD="sed -i 's%FQDNHOSTNAME%$FQDNHOSTNAME%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
 SEDCMD="sed -i 's%CLUSTERNAME%$CLUSTERNAME%g' ./kubeadm.yaml"
 eval "$SEDCMD"
 
@@ -134,7 +130,7 @@ sudo chown $(id -u):$(id -g) $HOME/.kube/config
 sudo usermod -aG docker $USER
 
 # un-taint the current node so it allows work to be scheduled here, such as Istiod.
-sudo kubectl taint nodes --all node-role.kubernetes.io/master- 
+sudo kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master- 
 
 # Install Calico w/etcd for networking
 curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o ./calico.yaml
@@ -166,4 +162,4 @@ curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
 ./istio-1.6.3/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
 kubectl label namespace default istio-injection=enabled
 
-echo "You can now use kubectl to work on the cluster, if you like.  Note, you MUST logout/login to use docker commands, due to group permissions changing."
+echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"

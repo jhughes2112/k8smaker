@@ -1,3 +1,4 @@
 kubeadm.yaml
 calico.yaml
 istio-**/
+k8smaker_worker_*
