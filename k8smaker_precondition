@@ -100,6 +100,7 @@ sudo apt-mark hold kubelet kubeadm kubectl
 
 # make etcd a symlink to the data folder
 sudo ln -s "$DATAFOLDER"/etcd /var/lib/etcd
+sudo mkdir -p "$DATAFOLDER"/etcd"
 
 sudo systemctl daemon-reload
 sudo systemctl restart docker
