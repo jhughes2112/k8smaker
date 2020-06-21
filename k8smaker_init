@@ -108,6 +108,8 @@ volumeStatsAggPeriod: 0s
 cgroupDriver: systemd
 EOF
 
+read -s -p $'Docker is now running.  Press enter to install Kubernetes  '
+
 # Actually create the cluster with just the control,etcd on this node.
 sudo kubeadm init --config="$INITSCRIPT" --upload-certs
 
