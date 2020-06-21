@@ -18,7 +18,7 @@ mkdir -p ~/"$CLUSTERNAME"
 DELSCRIPT=~/"$CLUSTERNAME/k8smaker_deleteall_$1"
 
 cp -f ./k8smaker_config "$DELSCRIPT"
-cat >"$DELSCRIPT" <<'EOF'
+cat >>"$DELSCRIPT" <<'EOF'
 if [[ $(whoami) = "root" ]]; then
    echo "Must not run as root."
    exit 1
@@ -28,8 +28,8 @@ fi
 echo "$(hostname) will have all its Docker, Kubernetes, and Etcd data deleted! You have 5 seconds to cancel with Control-C"
 sleep 5
 
-# First, let kubeadm have a go at it.
-sudo kubeadm reset -f
+# First, let kubeadm have a go at it.  But do it in root's own shell, to protect our .kube folder from permission squatting.
+sudo -i kubeadm reset -f
 
 # Wipe IP tables back to normal
 echo "Resetting iptables to blank slate."

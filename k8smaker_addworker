@@ -35,10 +35,10 @@ echo "#!/bin/bash" >"$ADDSCRIPT"
 echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
 cat ./k8smaker_config >>"$ADDSCRIPT"
 cat ./k8smaker_precondition >>"$ADDSCRIPT"
-DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
-echo "sudo kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>"$ADDSCRIPT"
-echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
 echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
+DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
+echo "sudo -i kubeadm join control-nodes:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>"$ADDSCRIPT"
+echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
 
 # copy the script to the new node and run it

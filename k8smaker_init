@@ -108,18 +108,23 @@ volumeStatsAggPeriod: 0s
 cgroupDriver: systemd
 EOF
 
-read -s -p $'Docker is now running.  Press enter to install Kubernetes  '
+read -s -p $'Press enter to continue  '
 
-# Actually create the cluster with just the control,etcd on this node.
-sudo kubeadm init --config="$INITSCRIPT" --upload-certs
+# Actually create the cluster with just the control,etcd on this node, but do so AS root in root's own shell.
+# Otherwise, you get permissions issues in your ~/.kube folder.
+sudo -i kubeadm init --config="$INITSCRIPT" --upload-certs
+
+read -s -p $'Press enter to continue  '
 
 # Configure kubectl to talk to the local cluster in your user login.
 mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
+read -s -p $'Press enter to continue  '
+
 # un-taint the current node so it allows work to be scheduled here, such as Istiod.
-sudo kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master- 
+kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master- 
 
 # Install Calico w/etcd for networking
 curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o "$CALICOSCRIPT"
