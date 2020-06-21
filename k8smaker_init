@@ -141,8 +141,22 @@ ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
 SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' $CALICOSCRIPT"
 eval "$SEDCMD"
 
-echo "Installing Calico"
+# Fix Calico's IP autodetection to actually find a valid interface.  Why this isn't the default blows my mind.
+sed -i -e '/^            # Auto-detect the BGP IP address.*/i\            # Set auto-detect method to be publicly routable, whatever that interface may be\n            - name: IP_AUTODETECTION_METHOD\n              value: "can-reach=8.8.8.8"' $CALICOSCRIPT 
+
+echo "Installing Calico, configuring calcicoctl"
 kubectl apply -f "$CALICOSCRIPT"
+sudo curl -L  https://github.com/projectcalico/calicoctl/releases/download/v3.15.0/calicoctl -o /usr/local/bin/calicoctl
+sudo chmod a+x /usr/local/bin/calicoctl
+sudo mkdir -p /etc/calico
+sudo tee /etc/calico/calicoctl.cfg >/dev/null <<EOF
+apiVersion: projectcalico.org/v3
+kind: CalicoAPIConfig
+metadata:
+spec:
+  datastoreType: "kubernetes"
+  kubeconfig: "$HOME/.kube/config"
+EOF
 
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
 echo "Installing Istio"
