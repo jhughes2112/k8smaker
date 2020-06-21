@@ -2,23 +2,25 @@
 # k8smaker
 Automating all the things!
 
-This is a personal project to make it easier to stand up a Kubernetes cluster from a fresh install of Ubuntu.  The number of times I have done these dozens of steps, I cannot count.  Rather than keep the cheat sheet of commands with me, I wrote this set of scripts so I can essentially wipe out a machine, pull down this repo, and launch the **k8smaker_init** script and BAM, Kubernetes cluster on one machine.
+This is a personal project to make it easier to stand up a Kubernetes cluster from a fresh install of Ubuntu.  The number of times I have done these dozens of steps, I cannot count.  Rather than keep the cheat sheet of commands with me, I wrote this set of scripts so I can essentially wipe out a machine, pull down this repo, and launch the **k8smaker_init** script and BAM, Kubernetes cluster on one machine.  Run **k8smaker_addworker yournode** and now you have a two node cluster.  Repeat as desired.  Easy!
 
-Furthermore, the documentation for all the things you should do to setup a machine is fairly scattered.  Every step is important, of course, but if you have read some of the walkthroughs on installing Kubernetes, most of them include relatively few of the preconditioning steps. The **k8smaker_precondition** script runs on every machine, so if there's anything you need to add to it, fork and have at it.  Send me a PR if it's something everyone should do--I'm sure I missed some things.
+Furthermore, the documentation for all the things you should do to setup a machine is fairly scattered.  Every step is important, of course, but if you have read some of the walkthroughs on installing Kubernetes, most of them include relatively few of the preconditioning steps.  This gathers everything into one place and does all the things that I've seen recommended at each step, in the right orders.
 
 # Usage
 - All these scripts are intended to run from the first machine in the k8s cluster, which we'll call `control-node`.  
-- Take a moment to edit **k8smaker_config** to change the name of the cluster, the bootstrap token, and anything else you want.  
-- If you have an existing Docker install with things running that you care about **do not run these scripts**. They uninstall and reinstall with wild abandon.  In particular, **k8smaker_deleteall** lives up to its name and will aggressively destroy data.
+- Edit **k8smaker_config** and set cluster name, change the bootstrap token, etc.
 - Run **k8smaker_init** and that node will become the `control-node`.  It will be etcd,control,worker initially.
-- If you want more nodes in your cluster, run **k8smaker_addworker <ip/machine-name>** and it will be added to the cluster.  At that time, the `control-node` will revert back to just etcd,control if you have it set to do so in the config file.
+- To add worker nodes, run **k8smaker_addworker (ip/machine-name)**.  If you specified it to in the config file, this is when `control-node` will remove its worker role and revert back to just etcd,control.
+- If you have a node you want to take down, **k8smaker_drain (nodename)** will drain it for you.  This will eventually manage re-scaling stateful apps that need to be rescheduled, but otherwise just executes the correct kubectl drain command for you.
+- If you have a node that is already drained, crashed, or no even longer reachable on the network, **k8smaker_deleteall (nodename)** will delete the node from the cluster as well as attempt to connect to it and remove every trace of Docker and Kubernetes.  Drain first if you can, though.
+- Run **k8smaker_undrain** to bring a drained node back online.  Technically, the right name is uncordon, but it ruins the symmetry of the naming, sorry.
 
 ## Cluster Configuration
  - Kubernetes 1.18.4
  - Ubuntu 18.04LTS
  - Bare metal or anything else
  - etcd and control plane are stacked on control nodes
- -- A smaller machine will suffice to manage the cluster
+ -- A smaller machine will suffice to manage the cluster (2+CPU, 2+GB RAM)
  -- Setup for HA control cluster, even if you only have one to start with
  - pods run on worker nodes
  -- Use beefy machines for these
@@ -27,25 +29,37 @@ Furthermore, the documentation for all the things you should do to setup a machi
 
 ## Prerequisites for k8smaker
  - All nodes need to be a `systemd`-based Ubuntu 18.04LTS (or similar Debian distro)
- - All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/) installed so `control-node1` can configure them
- - All nodes need the same username (often `ubuntu` but can be anything)
+ - All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/) installed, but don't worry about setting up keys.  That's built in.
+ - All nodes need the same username (often `ubuntu` but can be anything), and needs `sudo` access.
+ - All scripts are to be executed on the `control-node` machine.
 
 ## k8smaker_config
-Edit this file to set your cluster name, username, etc.  This is shared across all the scripts.  See comments for what each variable means.
+Edit this file to set your cluster name, username, etc.  This is shared across all the scripts that need it, not all do.  See comments for what each variable means.
 
 In my case, I run on bare metal that boots from a slow drive, but have fast data drives.  So this script allows me to configure the device to mount at the data folder location.  If this doesn't apply to you, point it at anything other than a block device and it'll skip that part.  You still want to provide it a root folder for all the data, since /var/lib/docker and /var/lib/etcd get mapped there.
 
-## k8smaker_init
-You run this on the machine you want to be the `control-node`.  This script preps the machine, which configures apt, installs a few packages it needs to do the install like curl, docker, kubeadm, kubectl, kubelet, etc.  Several .yaml files are generated by this process and scattered across the file system.  All changes are attempted to be made in a way that it is non-harmful to run a second time, if you need to blow away the cluster and start again, without reinstalling the OS.  Be aware, that running it a second time **destroys any existing k8s cluster** and builds you a new one.  If you have any etcd data or docker volumes you want to preserve, copy them somewhere else first.  
+## k8smaker_precondition
+This script is executed on the `control-node` when it is initializing the k8s cluster the first time.  It is also executed on each worker as it is added.  Consequently, it's a great place to throw additional tweaks to the configuration if you want.
 
-One little quirk is that Istio does not complete installation to just control nodes, as some of the pods require scheduling onto  worker nodes.  In order for this configuration to be a fully working cluster on a single node, this script leaves the `control-node` as a full etcd,control,worker role.  There's a setting in the config file to convert it to etcd,control when the first worker node is added.
+## k8smaker_init
+You run this on the machine you want to be the `control-node`.  This script preps the machine, which configures apt, installs a few packages it needs to do the install like curl, docker, kubeadm, kubectl, kubelet, etc.  Several .yaml files are generated by this process and scattered across the file system.  This script does not go out of its way to delete files on disk that might exist, but it will install/upgrade things.  If you already have docker images running on this machine, the /var/lib/docker folder will move, so you are going to want to stop all your containers first, then move the contents of /var/lib/docker to $DATAFOLDER/docker.
+
+One little quirk is that Istio refuses to complete installation without a worker node to schedule some pods onto.  Consequently, the `control-node` always starts off as a full etcd,control,worker role, which means you have a fully working cluster immediately .  There's a setting in the config file to convert it to etcd,control when the first worker node is added.
 
 ## k8smaker_addworker
 You run this on the `control-node`, passing it the IP or hostname of the worker node to be added to the cluster.  First, it generates a Bash script called **k8smaker_worker_(hostname)** into the local directory so you can inspect what it's doing.  The script then configures the new node with an ssh key, copies the customized Bash script over, then remote executes it.  You will probably need to accept the SSH signature, provide the password the first time to ssh, then give the password to allow sudo access, since some commands require root to configure the machine.
 
-## Some parts run as Root
+## k8smaster_drain
+This simply tries to drain pods off the specified node.  It's still part of the cluster, just not in use.  Some things don't drain nicely, but I'll handle that better in the future--hence the script.
+
+## k8smaster_undrain
+This puts a drained node back into service.  Simple as that.
+
+## k8smaster_deleteall
+This constructs a script to run on the specified host, copies and remotely executes it on that host, then attempts to delete the node from the cluster on the off-chance it's unable to reach it (crashed, network down, whatever).  If it successfully executes the script, everything related to Docker, Kubernetes, etcd, and so forth is deleted off the machine and uninstalled.  It's vicious, so be careful.  Always try to drain first, or you may experience data loss depending on your workload.
+
+## Warning: Some parts of this run as Root
 Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
 
 ## TODO
-- Add a script to remove a node from the cluster and wipe it clean.
 - Add a script to add an etcd,control node to the cluster, or change init to start with a 1-, 3- or 5-node control plane.
