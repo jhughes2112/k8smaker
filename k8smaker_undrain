@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [[ $(whoami) = "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+if [[ $1 = '' ]]; then
+   echo "Pass IP or hostname of the worker node as the first argument:"
+   echo "./k8smaker_addworker worker1.local"
+   exit 1
+fi
+
+if kubectl get node "$1" --no-headers 2>&1 | grep -q "not found"; then
+   echo "$1 is not currently in the cluster."
+   exit 1
+fi
+
+kubectl uncordon "$1" 
+

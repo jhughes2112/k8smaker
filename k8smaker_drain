@@ -1,0 +1,48 @@
+#!/bin/bash
+
+if [[ $(whoami) = "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+source ./k8smaker_config
+
+if [[ $1 = '' ]]; then
+   echo "Pass IP or hostname of the worker node as the first argument:"
+   echo "./k8smaker_addworker worker1.local"
+   exit 1
+fi
+
+if kubectl get node "$1" --no-headers 2>&1 | grep -q "not found"; then
+   echo "$1 is not currently in the cluster."
+   exit 1
+fi
+
+# this picks up your external facing IP address and hostname
+echo "Worker is $SSHUSERNAME@$1"
+
+# Simply drain and remove the node.  This does NOT harm the node itself, just takes everything off it and removes it from the cluster.
+echo "This strictly drains all pods from $1 and leaves it in a non-scheduled state.  You have 5 seconds to hit Control-C To Abort!"
+sleep 5
+
+# generate the script we want to run on the remote machine
+echo "Draining $1 gracefully, which may take a little while.  Be patient.  This may leave some pods from DaemonSets and StatefulSets behind, which we clean up afterwards."
+kubectl drain "$1" --ignore-daemonsets --delete-local-data
+
+# Make an array of PODS and POD-NAMESPACES, so we can deal with them
+#echo "Gently telling pods to go away that generally don't.  These may complain or even start up again."
+#PODSONNODE=( $(kubectl get pods -A --no-headers --field-selector spec.nodeName="$1" -o custom-columns=NAME:.metadata.name) )
+#PODNAMESPACES=( $(kubectl get pods -A --no-headers --field-selector spec.nodeName="$1" -o custom-columns=NAME:.metadata.namespace) )
+#for i in ${!PODSONNODE[@]}; do
+#   echo "Deleting pod ${PODSONNODE[$i]}"
+#   kubectl delete --grace-period=30 -n ${PODNAMESPACES[$i]} pod/${PODSONNODE[$i]}
+#done
+#
+#echo "Now, very forcefully deleting pods that refused to go down quietly."
+#PODSONNODE=( $(kubectl get pods -A --no-headers --field-selector spec.nodeName="$1" -o custom-columns=NAME:.metadata.name) )
+#PODNAMESPACES=( $(kubectl get pods -A --no-headers --field-selector spec.nodeName="$1" -o custom-columns=NAME:.metadata.namespace) )
+#for i in ${!PODSONNODE[@]}; do
+#   echo "Force-Deleting pod ${PODSONNODE[$i]}"
+#   kubectl delete --force=true --grace-period=30 -n ${PODNAMESPACES[$i]} pod/${PODSONNODE[$i]}
+#done
+

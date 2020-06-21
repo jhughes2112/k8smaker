@@ -1,11 +1,15 @@
 #!/bin/bash
 
-if [[ $(whoami) == "root" ]]; then
+if [[ $(whoami) = "root" ]]; then
    echo "Must not run as root."
    exit 1
 fi
 
 source ./k8smaker_config
+
+mkdir -p ~/"$CLUSTERNAME"
+INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
+CALICOSCRIPT=~/"$CLUSTERNAME/calicoetcd.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
@@ -19,24 +23,27 @@ sleep 5
 # Generate an ssh key just for connecting to other nodes and managing their startup
 mkdir -p $HOME/.ssh
 chmod 0700 $HOME/.ssh
-ssh-keygen -t rsa -f $HOME/.ssh/k8smaker -N '' <<< y
+ssh-keygen -t rsa -f "$HOME/.ssh/$CLUSTERNAME" -N '' <<< y
 
 source ./k8smaker_precondition
 
+# Give user access to docker
+sudo usermod -aG docker $USER
+
 # Note, the bootstrap token is insecure because it's not randomized nor does it expire (ttl).
-cat >./kubeadm.yaml <<EOF
+cat >"$INITSCRIPT" <<EOF
 kind: InitConfiguration
 apiVersion: kubeadm.k8s.io/v1beta2
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
-  token: BOOTSTRAPTOKEN
+  token: $BOOTSTRAPTOKEN
   ttl: 0s
   usages:
   - signing
   - authentication
 localAPIEndpoint:
-  advertiseAddress: CONTROLNODEIP
+  advertiseAddress: $CONTROLNODEIP
   bindPort: 6443
 nodeRegistration:
   criSocket: /var/run/dockershim.sock
@@ -49,7 +56,7 @@ apiServer:
   timeoutForControlPlane: 4m0s
 apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
-clusterName: CLUSTERNAME
+clusterName: $CLUSTERNAME
 controllerManager: {}
 dns:
   type: CoreDNS
@@ -60,8 +67,8 @@ imageRepository: k8s.gcr.io
 kubernetesVersion: v1.18.4
 networking:
   dnsDomain: cluster.local
-  serviceSubnet: SERVICESUBNET
-  podSubnet: PODSUBNET
+  serviceSubnet: $SERVICESUBNET
+  podSubnet: $PODSUBNET
 controlPlaneEndpoint: control-nodes
 scheduler: {}
 ---
@@ -81,7 +88,7 @@ authorization:
     cacheAuthorizedTTL: 0s
     cacheUnauthorizedTTL: 0s
 clusterDNS:
-- CLUSTERDNS
+- $CLUSTERDNS
 clusterDomain: cluster.local
 cpuManagerReconcilePeriod: 0s
 evictionPressureTransitionPeriod: 0s
@@ -101,65 +108,47 @@ volumeStatsAggPeriod: 0s
 cgroupDriver: systemd
 EOF
 
-# Replace some entries in the init script with actual values
-SEDCMD="sed -i 's%BOOTSTRAPTOKEN%$BOOTSTRAPTOKEN%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
-SEDCMD="sed -i 's%CONTROLNODEIP%$CONTROLNODEIP%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
-SEDCMD="sed -i 's%CLUSTERNAME%$CLUSTERNAME%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
-SEDCMD="sed -i 's%SERVICESUBNET%$SERVICESUBNET%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
-SEDCMD="sed -i 's%CLUSTERDNS%$CLUSTERDNS%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
-SEDCMD="sed -i 's%PODSUBNET%$PODSUBNET%g' ./kubeadm.yaml"
-eval "$SEDCMD"
-
 # Actually create the cluster with just the control,etcd on this node.
-sudo kubeadm init --config=./kubeadm.yaml --upload-certs
+sudo kubeadm init --config="$INITSCRIPT" --upload-certs
 
 # Configure kubectl to talk to the local cluster in your user login.
 mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
-sudo usermod -aG docker $USER
 
 # un-taint the current node so it allows work to be scheduled here, such as Istiod.
 sudo kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master- 
 
 # Install Calico w/etcd for networking
-curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o ./calico.yaml
-sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/etcd-ca"%g' ./calico.yaml
-sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' ./calico.yaml
-sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' ./calico.yaml
+curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o "$CALICOSCRIPT"
+sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/etcd-ca"%g' "$CALICOSCRIPT"
+sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' "$CALICOSCRIPT"
+sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' "$CALICOSCRIPT"
 
-SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g' ./calico.yaml"
+SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g' $CALICOSCRIPT"
 eval "$SEDCMD"
 
 ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' ./calico.yaml"
+SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' $CALICOSCRIPT"
 eval "$SEDCMD"
 
 ETCDCERT=$(sudo cat /etc/kubernetes/pki/etcd/peer.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' ./calico.yaml"
+SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' $CALICOSCRIPT"
 eval "$SEDCMD"
 
 ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' ./calico.yaml"
+SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' $CALICOSCRIPT"
 eval "$SEDCMD"
 
 echo "Installing Calico"
-kubectl apply -f ./calico.yaml
+kubectl apply -f "$CALICOSCRIPT"
 
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
 echo "Installing Istio"
+pushd ~/"$CLUSTERNAME"
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
 ./istio-1.6.3/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
+popd
 kubectl label namespace default istio-injection=enabled
 
 echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"

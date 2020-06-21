@@ -1,18 +1,39 @@
 #!/bin/bash
 
-if [[ $(whoami) == "root" ]]; then
+if [[ $(whoami) = "root" ]]; then
    echo "Must not run as root."
+   exit 1
+fi
+
+if [[ "$1" = '' ]]; then
+   echo "Provide the hostname of the machine you want to delete from the cluster and uninstall everything."
+   echo "Pass IP or hostname of the worker node as the first argument:"
+   echo "./k8smaker_deleteall worker1.local"
    exit 1
 fi
 
 source ./k8smaker_config
 
+mkdir -p ~/"$CLUSTERNAME"
+DELSCRIPT=~/"$CLUSTERNAME/k8smaker_deleteall_$1"
+
+cp -f ./k8smaker_config "$DELSCRIPT"
+cat >"$DELSCRIPT" <<'EOF'
+if [[ $(whoami) = "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
 # DELETES AND REMOVES ALL k8s and docker libraries and data.  Do not run this on a machine that has stuff you care about.
-echo "You have 5 seconds before this script deletes all Kubernetes, Docker and Etcd data.  Control-C To Abort!"
+echo "$(hostname) will have all its Docker, Kubernetes, and Etcd data deleted! You have 5 seconds to cancel with Control-C"
 sleep 5
 
 # First, let kubeadm have a go at it.
 sudo kubeadm reset -f
+
+# Wipe IP tables back to normal
+echo "Resetting iptables to blank slate."
+sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sudo iptables -X
 
 # Get rid of anything that might cause conflicts, old versions, etc
 if command kubelet 2>/dev/null; then
@@ -32,3 +53,23 @@ if [[ -f $DATAFOLDER ]]; then
    sudo rm -rf "$DATAFOLDER"/etcd "$DATAFOLDER"/docker
 fi
 sudo groupdel docker
+EOF
+
+chmod a+x "$DELSCRIPT"
+
+if host "$1" | grep -q " 127.0"; then
+   echo "Executing local delete."
+   source "$DELSCRIPT"
+else
+   # copy the script to the node and run it
+   scp -i "$HOME/.ssh/$CLUSTERNAME" "$DELSCRIPT" "$SSHUSERNAME"@"$1":~/"k8smaker_deleteall_$1"
+   ssh -t -i "$HOME/.ssh/$CLUSTERNAME" "$SSHUSERNAME"@"$1" ~/"k8smaker_deleteall_$1"
+
+   # actually perform the node deletion here, since we have access to Kubectl and the node itself may be down/dead.
+   if kubectl get node "$1" --no-headers 2>&1 | grep -q "not found"; then
+      echo "$1 has been removed from the cluster."
+   else
+      echo "Deleting $1 from the cluster."
+      kubectl delete node "$1"
+   fi
+fi

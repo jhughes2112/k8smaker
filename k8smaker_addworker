@@ -1,22 +1,24 @@
 #!/bin/bash
 
-if [[ $(whoami) == "root" ]]; then
+if [[ $(whoami) = "root" ]]; then
    echo "Must not run as root."
    exit 1
 fi
 
 source ./k8smaker_config
 
-if [[ $1 == '' ]]; then
+if [[ $1 = '' ]]; then
    echo "Pass IP or hostname of the worker node as the first argument:"
    echo "./k8smaker_addworker worker1.local"
    exit 1
 fi
 
+mkdir -p ~/"$CLUSTERNAME"
+ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1"
+
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
 THISHOSTNAME=$(hostname)
-ADDSCRIPT="k8smaker_worker_$1"
 echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
 echo "Worker is $SSHUSERNAME@$1"
 echo "Script stored in $ADDSCRIPT"
@@ -26,7 +28,7 @@ echo "You have 5 seconds before this script remotely deletes all Kubernetes and 
 sleep 5
 
 # configure us to be able to login remotely without a password
-ssh-copy-id -f -i $HOME/.ssh/k8smaker.pub "$SSHUSERNAME"@"$1"
+ssh-copy-id -f -i "$HOME/.ssh/$CLUSTERNAME.pub" "$SSHUSERNAME"@"$1"
 
 # generate the script we want to run on the remote machine
 echo "#!/bin/bash" >"$ADDSCRIPT"
@@ -40,24 +42,24 @@ echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
 
 # copy the script to the new node and run it
-scp -i $HOME/.ssh/k8smaker "$ADDSCRIPT" "$SSHUSERNAME"@"$1":"~/$ADDSCRIPT"
-ssh -t -i $HOME/.ssh/k8smaker "$SSHUSERNAME"@"$1" "~/$ADDSCRIPT"
+scp -i "$HOME/.ssh/$CLUSTERNAME" "$ADDSCRIPT" "$SSHUSERNAME"@"$1":~/"k8smaker_addworker_$1"
+ssh -t -i "$HOME/.ssh/$CLUSTERNAME" "$SSHUSERNAME"@"$1" ~/"k8smaker_addworker_$1"
 
 # Configure kubectl for each worker node
-scp -i $HOME/.ssh/k8smaker ~/.kube/config "$SSHUSERNAME"@"$1":~/.kube/config
+scp -i "$HOME/.ssh/$CLUSTERNAME" ~/.kube/config "$SSHUSERNAME"@"$1":~/.kube/config
 
 # give the new node the role of 'worker'
 kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/worker="
 
 # Once you add a worker node, we mark the control plane as non-schedulable, since we specified for it to not handle work.
 if [[ "$CONTROLISWORKER" -eq "0" ]]; then
-   echo "$THISHOSTNAME will no longer be a worker."
    kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master=NoSchedule"
    kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master='':NoSchedule
+   echo "$THISHOSTNAME will no longer be a worker."
 else
-   echo "$THISHOSTNAME will stay as a worker."
    kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master="
-   if kubectl get node/"$THISHOSTNAME" -o custom-columns=TAINTS:.spec.taints --no-headers | grep -q "node-role.kubernetes.io/master"; then
+   if kubectl get node/"$THISHOSTNAME" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/master"; then
       kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master:NoSchedule-
    fi
+   echo "$THISHOSTNAME will stay as a worker."
 fi
