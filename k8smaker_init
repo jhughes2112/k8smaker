@@ -162,7 +162,9 @@ EOF
 echo "Installing Istio"
 pushd ~/"$CLUSTERNAME"
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
-./istio-1.6.3/bin/istioctl install --set profile=default --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
+sudo mv ./istio-1.6.3/bin/istioctl /usr/local/bin
+rm -rf istio-1.6.3
+istioctl install --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000"
 popd
 kubectl label namespace default istio-injection=enabled
 
