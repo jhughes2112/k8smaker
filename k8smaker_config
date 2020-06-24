@@ -29,3 +29,11 @@ SSHUSERNAME="jhughes"
 
 # Here you control whether you want control-node1 to also be a worker. 0 means no.
 CONTROLISWORKER=1
+
+# DO NOT PUT AN IP ADDRESS HERE!  You cannot change this value after creating the cluster.
+# BareMetal: Leave it alone.  The name is added to the /etc/hosts on each node, which allows
+# you to substitute a load balancer IP address on each node if you later need to.
+# AWS: Put the actual name of your internal control plane load balancer here, if you plan
+# to use one.  Otherwise leave it alone.  You can always come back and sub in the LB's IP address
+# but those sometimes change without notice, so YMMV.
+CONTROLPLANEENDPOINT="control-nodes"
