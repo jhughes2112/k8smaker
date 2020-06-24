@@ -61,12 +61,15 @@ SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/contain
 echo "Adding $DATAFOLDER to docker working folder"
 eval "sudo $SEDCMD"
 
-# add a DNS entry so we can do HA control node load balancing if we want to later.
-if grep -q "$CONTROLNODEIP control-nodes" /etc/hosts; then
-   echo "/etc/hosts already setup"
+# if there is a way to resolve the $CONTROLPLANEENDPOINT to an ip address, do nothing.  It means /etc/hosts is already 
+# configured or it's a FQDN or something.  Fine.  If not, set an IP address as the target of whatever the string is so
+# resolve it.
+RESOLVEDCONTROLIP = dig +short "$CONTROLPLANEENDPOINT"
+if [[ ! -z "$RESOLVEDCONTROLIP" ]]; then
+   echo "$CONTROLNODEIP resolves to $RESOLVEDCONTROLIP already"
 else
-   echo "$CONTROLNODEIP control-nodes" | sudo tee -a /etc/hosts >/dev/null
-   echo "Added $CONTROLNODEIP control-nodes entry to /etc/hosts"
+   echo "$CONTROLNODEIP $CONTROLPLANEENDPOINT" | sudo tee -a /etc/hosts >/dev/null
+   echo "Added $CONTROLNODEIP $CONTROLPLANEENDPOINT entry to /etc/hosts"
 fi
 
 # Performance improves if you disable Transparent Huge Pages.

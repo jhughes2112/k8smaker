@@ -1,0 +1,171 @@
+#!/bin/bash
+
+if [[ $(whoami) = "root" ]]; then
+   echo "Must not run as root."
+   exit 1
+fi
+
+source ./k8smaker_config
+
+mkdir -p ~/"$CLUSTERNAME"
+INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
+CALICOSCRIPT=~/"$CLUSTERNAME/calicoetcd.yaml"
+
+# this picks up your external facing IP address and hostname
+CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
+THISHOSTNAME=$(hostname)
+echo "Using $THISHOSTNAME at IP $CONTROLNODEIP"
+
+# Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
+echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
+sleep 5
+
+# Generate an ssh key just for connecting to other nodes and managing their startup
+mkdir -p $HOME/.ssh
+chmod 0700 $HOME/.ssh
+ssh-keygen -t rsa -f "$HOME/.ssh/$CLUSTERNAME" -N '' <<< y
+
+source ./k8smaker_precondition
+
+# Give user access to docker
+sudo usermod -aG docker $USER
+
+# Note, the bootstrap token is insecure because it's not randomized nor does it expire (ttl).
+cat >"$INITSCRIPT" <<EOF
+kind: InitConfiguration
+apiVersion: kubeadm.k8s.io/v1beta2
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: $BOOTSTRAPTOKEN
+  ttl: 0s
+  usages:
+  - signing
+  - authentication
+localAPIEndpoint:
+  advertiseAddress: $CONTROLNODEIP
+  bindPort: 6443
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+---
+kind: ClusterConfiguration
+apiServer:
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta2
+certificatesDir: /etc/kubernetes/pki
+clusterName: $CLUSTERNAME
+controllerManager: {}
+dns:
+  type: CoreDNS
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+imageRepository: k8s.gcr.io
+kubernetesVersion: v1.18.4
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: $SERVICESUBNET
+  podSubnet: $PODSUBNET
+controlPlaneEndpoint: $CONTROLPLANEENDPOINT
+scheduler: {}
+---
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    cacheTTL: 0s
+    enabled: true
+  x509:
+    clientCAFile: /etc/kubernetes/pki/ca.crt
+authorization:
+  mode: Webhook
+  webhook:
+    cacheAuthorizedTTL: 0s
+    cacheUnauthorizedTTL: 0s
+clusterDNS:
+- $CLUSTERDNS
+clusterDomain: cluster.local
+cpuManagerReconcilePeriod: 0s
+evictionPressureTransitionPeriod: 0s
+fileCheckFrequency: 0s
+healthzBindAddress: 127.0.0.1
+healthzPort: 10248
+httpCheckFrequency: 0s
+imageMinimumGCAge: 0s
+nodeStatusReportFrequency: 0s
+nodeStatusUpdateFrequency: 0s
+rotateCertificates: true
+runtimeRequestTimeout: 0s
+staticPodPath: /etc/kubernetes/manifests
+streamingConnectionIdleTimeout: 0s
+syncFrequency: 0s
+volumeStatsAggPeriod: 0s
+cgroupDriver: systemd
+EOF
+
+# Actually create the cluster with just the control,etcd on this node, but do so AS root in root's own shell.
+# Otherwise, you get permissions issues in your ~/.kube folder.
+sudo -i kubeadm init --config="$INITSCRIPT" --upload-certs
+
+# Configure kubectl to talk to the local cluster in your user login.
+mkdir -p $HOME/.kube
+sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# un-taint the current node so it allows work to be scheduled here, such as Istiod.
+kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master- 
+
+# Install Calico w/etcd for networking
+curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o "$CALICOSCRIPT"
+sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/etcd-ca"%g' "$CALICOSCRIPT"
+sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' "$CALICOSCRIPT"
+sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' "$CALICOSCRIPT"
+
+SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g' $CALICOSCRIPT"
+eval "$SEDCMD"
+
+ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' $CALICOSCRIPT"
+eval "$SEDCMD"
+
+ETCDCERT=$(sudo cat /etc/kubernetes/pki/etcd/peer.crt | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' $CALICOSCRIPT"
+eval "$SEDCMD"
+
+ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
+SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' $CALICOSCRIPT"
+eval "$SEDCMD"
+
+# Fix Calico's IP autodetection to actually find a valid interface.  Why this isn't the default blows my mind.
+sed -i -e '/^            # Auto-detect the BGP IP address.*/i\            # Set auto-detect method to be publicly routable, whatever that interface may be\n            - name: IP_AUTODETECTION_METHOD\n              value: "can-reach=8.8.8.8"' $CALICOSCRIPT 
+
+echo "Installing Calico, configuring calcicoctl"
+kubectl apply -f "$CALICOSCRIPT"
+sudo curl -L  https://github.com/projectcalico/calicoctl/releases/download/v3.15.0/calicoctl -o /usr/local/bin/calicoctl
+sudo chmod a+x /usr/local/bin/calicoctl
+sudo mkdir -p /etc/calico
+sudo tee /etc/calico/calicoctl.cfg >/dev/null <<EOF
+apiVersion: projectcalico.org/v3
+kind: CalicoAPIConfig
+metadata:
+spec:
+  datastoreType: "kubernetes"
+  kubeconfig: "$HOME/.kube/config"
+EOF
+
+# Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
+echo "Installing Istio"
+pushd ~/"$CLUSTERNAME"
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
+sudo mv ./istio-1.6.3/bin/istioctl /usr/local/bin
+rm -rf istio-1.6.3
+istioctl install --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt
+popd
+kubectl label namespace default istio-injection=enabled
+
+echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"

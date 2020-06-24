@@ -46,6 +46,7 @@ localAPIEndpoint:
   advertiseAddress: $CONTROLNODEIP
   bindPort: 6443
 nodeRegistration:
+  cloud-provider: aws
   criSocket: /var/run/dockershim.sock
   taints:
   - effect: NoSchedule
@@ -54,10 +55,16 @@ nodeRegistration:
 kind: ClusterConfiguration
 apiServer:
   timeoutForControlPlane: 4m0s
+  extraArgs:
+    cloud-provider: aws
 apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
 clusterName: $CLUSTERNAME
-controllerManager: {}
+controllerManager:
+  extraArgs:
+    cloud-provider: aws
+    configure-cloud-routes: "false"
+    address: 0.0.0.0
 dns:
   type: CoreDNS
 etcd:
@@ -69,8 +76,10 @@ networking:
   dnsDomain: cluster.local
   serviceSubnet: $SERVICESUBNET
   podSubnet: $PODSUBNET
-controlPlaneEndpoint: control-nodes
-scheduler: {}
+controlPlaneEndpoint: $CONTROLPLANEENDPOINT
+scheduler:
+  extraArgs:
+    address: 0.0.0.0
 ---
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -164,8 +173,10 @@ pushd ~/"$CLUSTERNAME"
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
 sudo mv ./istio-1.6.3/bin/istioctl /usr/local/bin
 rm -rf istio-1.6.3
-istioctl install --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt
+istioctl manifest generate --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt >istio.yaml
+# use sed to inject AWS annotation for NLB here
+kubectl apply -f istio.yaml
 popd
 kubectl label namespace default istio-injection=enabled
 
-echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"
+echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP or $(dig +short myip.opendns.com @resolver1.opendns.com), whichever is publicly."
