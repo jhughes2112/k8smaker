@@ -25,7 +25,7 @@ if [[ $(whoami) = "root" ]]; then
 fi
 
 # DELETES AND REMOVES ALL k8s and docker libraries and data.  Do not run this on a machine that has stuff you care about.
-echo "$(hostname) will have all its Docker, Kubernetes, and Etcd data deleted! You have 5 seconds to cancel with Control-C"
+echo "$(hostname -f) will have all its Docker, Kubernetes, and Etcd data deleted! You have 5 seconds to cancel with Control-C"
 sleep 5
 
 # First, let kubeadm have a go at it.  But do it in root's own shell, to protect our .kube folder from permission squatting.

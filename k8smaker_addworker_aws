@@ -15,10 +15,11 @@ fi
 
 mkdir -p ~/"$CLUSTERNAME"
 ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1"
+KUBEADMSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1_join.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname)
+THISHOSTNAME=$(hostname -f)
 echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
 echo "Worker is $SSHUSERNAME@$1"
 echo "Script stored in $ADDSCRIPT"
@@ -35,14 +36,30 @@ echo "#!/bin/bash" >"$ADDSCRIPT"
 echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
 cat ./k8smaker_config >>"$ADDSCRIPT"
 cat ./k8smaker_precondition >>"$ADDSCRIPT"
+echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
 echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
-echo "sudo -i kubeadm join $CONTROLPLANEENDPOINT:6443 --token $BOOTSTRAPTOKEN --discovery-token-ca-cert-hash sha256:$DISCOVERYTOKEN" >>"$ADDSCRIPT"
-echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
+echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addworker_$1_join.yaml" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
 
-# copy the script to the new node and run it
+# Generate the kubeadm join script and copy it to the remote machine
+cat >"$KUBEADMSCRIPT" <<EOF
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    token: ${BOOTSTRAPTOKEN}
+    apiServerEndpoint: "${CONTROLPLANEENDPOINT}:6443"
+    caCertHashes: ["sha256:${DISCOVERYTOKEN}"]
+nodeRegistration:
+  kubeletExtraArgs:
+    cloud-provider: aws
+EOF
+
+# copy the scripts to the new node and run it
 scp -i "$HOME/.ssh/$CLUSTERNAME" "$ADDSCRIPT" "$SSHUSERNAME"@"$1":~/"k8smaker_addworker_$1"
+scp -i "$HOME/.ssh/$CLUSTERNAME" "$KUBEADMSCRIPT" "$SSHUSERNAME"@"$1":~/"k8smaker_addworker_$1_join.yaml"
 ssh -t -i "$HOME/.ssh/$CLUSTERNAME" "$SSHUSERNAME"@"$1" ~/"k8smaker_addworker_$1"
 
 # Configure kubectl for each worker node

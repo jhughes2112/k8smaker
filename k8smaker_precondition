@@ -66,7 +66,7 @@ eval "sudo $SEDCMD"
 # resolve it.
 RESOLVEDCONTROLIP=$(dig +short "$CONTROLPLANEENDPOINT")
 if [[ ! -z "$RESOLVEDCONTROLIP" ]]; then
-   echo "$CONTROLNODEIP resolves to $RESOLVEDCONTROLIP already"
+   echo "$CONTROLPLANEENDPOINT resolves to $RESOLVEDCONTROLIP already"
 else
    echo "$CONTROLNODEIP $CONTROLPLANEENDPOINT" | sudo tee -a /etc/hosts >/dev/null
    echo "Added $CONTROLNODEIP $CONTROLPLANEENDPOINT entry to /etc/hosts"

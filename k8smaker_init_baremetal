@@ -13,7 +13,7 @@ CALICOSCRIPT=~/"$CLUSTERNAME/calicoetcd.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname)
+THISHOSTNAME=$(hostname -f)
 echo "Using $THISHOSTNAME at IP $CONTROLNODEIP"
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
@@ -57,7 +57,9 @@ apiServer:
 apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
 clusterName: $CLUSTERNAME
-controllerManager: {}
+controllerManager:
+  extraArgs:
+    address: 0.0.0.0
 dns:
   type: CoreDNS
 etcd:
@@ -70,7 +72,9 @@ networking:
   serviceSubnet: $SERVICESUBNET
   podSubnet: $PODSUBNET
 controlPlaneEndpoint: $CONTROLPLANEENDPOINT
-scheduler: {}
+scheduler:
+  extraArgs:
+    address: 0.0.0.0
 ---
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
@@ -164,7 +168,12 @@ pushd ~/"$CLUSTERNAME"
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
 sudo mv ./istio-1.6.3/bin/istioctl /usr/local/bin
 rm -rf istio-1.6.3
-istioctl install --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt
+istioctl manifest generate --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt >istio.yaml
+kubectl create ns istio-system
+kubectl apply -f istio.yaml
+echo "---> If you see errors above about 'unable to recognize' etc, don't worry.  It's just running too fast.  5 seconds and it'll work."
+sleep 5
+kubectl apply -f istio.yaml
 popd
 kubectl label namespace default istio-injection=enabled
 
