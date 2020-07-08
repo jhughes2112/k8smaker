@@ -1,0 +1,177 @@
+#
+# This configures a virtualservice to handle traffic by hostname, which were declared in the istio-gw.
+# When a match occurs, it passes traffic to a Service that has a name equal to the 'host' field, and the port
+# must match between the VirtualService and the declared port in the Service.
+# The service then passes traffic by name (to prevent port number mismatching) to the pods with the label declared
+# in the selector.  At the bottom is an example of using a simple NFS mount for a volume, but you can easily change
+# that or remove it.  It's just an example to be helpful.
+#
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: yourwebsite
+  labels:
+    app: yourwebsite
+spec:
+  hosts:
+  - "www.yourwebsite.com"
+  - "yourwebsite.com"
+  gateways:
+  - istio-gw
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: yourwebsite  # this refers to a Service with name="yourwebsite"
+        port:
+          number: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yourwebsite
+  labels:
+    app: yourwebsite
+spec:
+  ports:
+  - port: 80
+    name: http-web  
+    protocol: TCP
+    targetPort: web
+  selector:
+    app: yourwebsite  # send traffic to pods with this label
+  sessionAffinity: None
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yourwebsite
+  labels:
+    app: yourwebsite
+spec:
+  selector:
+    matchLabels:
+      app: yourwebsite
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"  # if this is true, https gets proxied and everything breaks
+      labels:
+        app: yourwebsite
+        version: 1.0.0    
+    spec:
+      containers:
+      - image: nginx:alpine
+        name: yourwebsite
+        ports:
+        - containerPort: 80
+          name: web
+        volumeMounts:
+        - name: data
+          mountPath: /var/www/html
+        - name: config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        livenessProbe: 
+          initialDelaySeconds: 10
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 5
+          httpGet:
+            path: /health
+            port: web
+        readinessProbe: 
+          initialDelaySeconds: 20
+          timeoutSeconds: 10
+          periodSeconds: 30
+          failureThreshold: 5
+          httpGet:
+            path: /health
+            port: web
+        resources:
+          limits:
+            cpu: "1.0"
+            memory: "2Gi"
+          requests:
+            cpu: "0.25"
+            memory: "100Mi"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: yourwebsite-pvc
+      - name: config
+        configMap:
+          name: website-configmap
+          items:
+          - key: nginx.conf
+            path: nginx.conf
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: website-configmap
+  labels:
+    app: yourwebsite
+data:
+  nginx.conf: |
+    events
+    {
+    }
+    
+    http
+    {
+      server
+      {
+        listen 80;
+        root /var/www/html;
+        
+        location /health 
+        {
+          access_log off;
+          return 200 "healthy\n";
+        }        
+      }
+    }
+---
+kind: PersistentVolume
+apiVersion: v1
+metadata:
+  name: yourwebsite
+  namespace: default  # this MUST be set, or the claimRef fails.
+  labels:
+    pvc: yourwebsite
+spec:
+  storageClassName: ""
+  persistentVolumeReclaimPolicy: Retain
+  capacity:
+    storage: 20Gi
+  accessModes:
+  - ReadWriteOnce
+  nfs:
+    path: /mnt/volume/yourwebsite
+    server: yourNFSserver.com
+  claimRef:
+    namespace: default  # this MUST be set, or the claimRef fails.
+    name: yourwebsite-pvc  # must be able to find the PVC by name and namespace
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: yourwebsite-pvc
+  namespace: default  # this MUST be set, or the claimRef fails.
+spec:
+  storageClassName: ""  # by specifying "" it means PVC can only bind to a PV with "" set as storageClassName
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  selector:
+    matchLabels:
+      pvc: yourwebsite  # this matches the label
+---
