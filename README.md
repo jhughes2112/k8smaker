@@ -2,9 +2,11 @@
 # k8smaker
 Automating all the things!
 
-This is a personal project to make it easier to stand up a Kubernetes cluster from a fresh install of Ubuntu.  The number of times I have done these dozens of steps, I cannot count.  Rather than keep the cheat sheet of commands with me, I wrote this set of scripts so I can essentially wipe out a machine, pull down this repo, and launch the **k8smaker_init** script and BAM, Kubernetes cluster on one machine.  Run **k8smaker_addworker yournode** and now you have a two node cluster.  Repeat as desired.  Easy!
+This is a personal project to make it easier to stand up a Kubernetes cluster from a fresh install of Ubuntu.  The number of times I have done these dozens of steps, I cannot count.  Rather than keep the cheat sheet of commands with me, I wrote this set of scripts so I can essentially wipe out a machine, pull down this repo, and launch a couple of scripts and have a cluster running.  Most importantly, reverse the process and get back to a machine with nothing preventing the re-installation of a cluster.  Easy!
 
-Furthermore, the documentation for all the things you should do to setup a machine for Kubernetes is fairly scattered and hard-won.  Every step is important, of course, but if you have read some of the walkthroughs on installing Kubernetes, most of them include relatively few of the preconditioning steps.  This gathers everything into one place and does all the things that I've seen recommended at each step, in the right order.  All these scripts are intended to run from the first machine in the k8s cluster, which we'll call `control-node`.  
+Furthermore, the documentation for all the things you should do to setup a machine for Kubernetes is fairly scattered and hard-won.  Every step is important, of course, but if you have read some of the walkthroughs on installing Kubernetes, most of them include relatively few of the preconditioning steps.  This gathers everything into one place and does all the things that I've seen recommended at each step, in the right order.  All these scripts are intended to run from the first machine in the k8s cluster, which we'll call `control-node`.
+
+These scripts are built to work fine on baremetal or aws, and have slight differences in them to accommodate AWS's quirks.
 
 # Quickstart
 ## Init a cluster
@@ -19,7 +21,7 @@ Furthermore, the documentation for all the things you should do to setup a machi
 ## For each worker node
 - `ssh CONTROL_NODE`
 - `cd k8smaker`
-- ./k8smaker_addworker ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
+- `./k8smaker_addworker ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
 
 ## Cluster Configuration
  - Kubernetes 1.18.4
@@ -32,6 +34,7 @@ Furthermore, the documentation for all the things you should do to setup a machi
  -- Use beefy machines for these
  - **Calico** for networking automatically configured to talk to secured etcd
  - **Istio 1.6.3** for ingress and mesh routing
+ - On AWS, adding a worker also generates an NLB that automatically gets workers added as services are added to the cluster.
 
 ## Prerequisites for k8smaker
  - All nodes need to be a `systemd`-based Ubuntu 18.04LTS (or similar Debian distro)
