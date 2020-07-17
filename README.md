@@ -21,7 +21,7 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
 ## For each worker node
 - `ssh CONTROL_NODE`
 - `cd k8smaker`
-- `./k8smaker_addworker ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
+- `./k8smaker_addworker_aws ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
 
 ## Cluster Configuration
  - Kubernetes 1.18.4
