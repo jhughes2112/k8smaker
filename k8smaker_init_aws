@@ -174,11 +174,11 @@ EOF
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
 echo "Installing Istio"
 pushd ~/"$CLUSTERNAME"
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.3 sh - >/dev/null
-sudo mv ./istio-1.6.3/bin/istioctl /usr/local/bin
-rm -rf istio-1.6.3
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.8 sh - >/dev/null
+sudo mv ./istio-1.6.8/bin/istioctl /usr/local/bin
+rm -rf istio-1.6.8
 istioctl manifest generate --set profile=empty --set components.base.enabled=true > istio_1.yaml
-istioctl manifest generate --set values.grafana.enabled=true --set values.prometheus.enabled=true --set values.kiali.enabled=true --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana:3000" --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
+istioctl manifest generate --set values.grafana.enabled=false --set values.prometheus.enabled=false --set values.kiali.enabled=false --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana.default.svc.cluster.local:3000" --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
 kubectl create ns istio-system
 kubectl apply -f istio_1.yaml
 # inject AWS annotation for NLB here for workers.  Also, the reason we do this in a second pass is to allow the CRDs to finish registration, as Istio usually fails if it's all-in-one-go.
