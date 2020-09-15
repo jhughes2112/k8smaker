@@ -75,7 +75,7 @@ etcd:
   local:
     dataDir: /var/lib/etcd
 imageRepository: k8s.gcr.io
-kubernetesVersion: v1.18.4
+kubernetesVersion: v$KUBERNETESVERSION
 networking:
   dnsDomain: cluster.local
   serviceSubnet: $SERVICESUBNET
@@ -159,7 +159,7 @@ sed -i -e '/^            # Auto-detect the BGP IP address.*/i\            # Set 
 
 echo "Installing Calico, configuring calcicoctl"
 kubectl apply -f "$CALICOSCRIPT"
-sudo curl -L  https://github.com/projectcalico/calicoctl/releases/download/v3.15.0/calicoctl -o /usr/local/bin/calicoctl
+sudo curl -L  https://github.com/projectcalico/calicoctl/releases/download/$CALICOVERSION/calicoctl -o /usr/local/bin/calicoctl
 sudo chmod a+x /usr/local/bin/calicoctl
 sudo mkdir -p /etc/calico
 sudo tee /etc/calico/calicoctl.cfg >/dev/null <<EOF
@@ -174,9 +174,9 @@ EOF
 # Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
 echo "Installing Istio"
 pushd ~/"$CLUSTERNAME"
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.6.8 sh - >/dev/null
-sudo mv ./istio-1.6.8/bin/istioctl /usr/local/bin
-rm -rf istio-1.6.8
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=$ISTIOVERSION sh - >/dev/null
+sudo mv ./istio-$ISTIOVERSION/bin/istioctl /usr/local/bin
+rm -rf istio-$ISTIOVERSION
 istioctl manifest generate --set profile=empty --set components.base.enabled=true > istio_1.yaml
 istioctl manifest generate --set values.grafana.enabled=false --set values.prometheus.enabled=false --set values.kiali.enabled=false --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana.default.svc.cluster.local:3000" --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
 kubectl create ns istio-system

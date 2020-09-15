@@ -24,17 +24,18 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
 - `./k8smaker_addworker_aws ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
 
 ## Cluster Configuration
- - Kubernetes 1.18.4
- - Ubuntu 18.04LTS
- - Bare metal or anything else
+ - Bare metal or AWS. Easy to add more cloud hosts.
+ -- Ubuntu 18.04LTS
+ -- **Kubernetes** 1.19.1
+ -- **Istio** 1.7.1 for ingress and mesh routing
+ -- **Calico** 3.16.1 for networking automatically configured to talk to secured etcd
+ -- These versions can be changed in one place in the config file, but once you deploy a cluster, don't change them.
  - etcd and control plane are stacked on control nodes
  -- A smaller machine will suffice to manage the cluster (2+CPU, 2+GB RAM)
- -- Setup for HA control cluster, even if you only have one to start with
- - pods run on worker nodes
+ -- Setup for High Availability control cluster, even if you only have one to start with
+ - Pods run on worker nodes
  -- Use beefy machines for these
- - **Calico** for networking automatically configured to talk to secured etcd
- - **Istio 1.6.3** for ingress and mesh routing
- - On AWS, adding a worker also generates an NLB that automatically gets workers added as services are added to the cluster.
+ - On AWS, adding a worker also generates an NLB that automatically adds worker nodes when joined to the cluster.
 
 ## Prerequisites for k8smaker
  - All nodes need to be a `systemd`-based Ubuntu 18.04LTS (or similar Debian distro)
@@ -43,7 +44,7 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
  - All scripts are to be executed on the `control-node` machine.
 
 ## k8smaker_config
-Edit this file to set your cluster name, username, etc.  This is shared across all the scripts that need it, not all do.  See comments for what each variable means.
+Edit this file to set your cluster name, username, etc.  This is shared across all the scripts that need it.  See comments for what each variable means.
 
 In my case, I run on bare metal that boots from a slow drive, but have fast data drives.  So this script allows me to configure the device to mount at the data folder location.  If this doesn't apply to you, point it at anything other than a block device and it'll skip that part.  You still want to provide it a root folder for all the data, since /var/lib/docker and /var/lib/etcd get mapped there.
 
