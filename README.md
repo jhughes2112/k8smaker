@@ -68,6 +68,9 @@ Run this on the `control-node`, pass in the **nodename** to drain.  This puts a 
 ## k8smaster_deleteall
 You run this on the `control-node`, passing it the **IP or hostname** of the node you want to completely remove from the cluster.  This constructs a script to run on the specified host, copies and remotely executes it on that host, then attempts to delete the node from the cluster on the off-chance it's unable to reach it (crashed, network down, whatever).  If it successfully executes the script, everything related to Docker, Kubernetes, etcd, and so forth is deleted off the machine and uninstalled.  It's vicious, so be careful.  Always try to drain first, or you may experience data loss depending on your workload.  Note, this will also work on control nodes (you can pass `localhost` to it to wipe the current machine).
 
+## k8smaker_setcontrolnode
+You can use this script to change whether a control node will run workloads or not.  It's very simple.  Just pass it the **nodename** of the control node you want to change, followed by either **schedule** or **noschedule**, and it alters the labels and taints to allow kubelet to schedule pods there or not.  Be very careful, though, not to pass in any non-control node names.  It's not safe to do so and may cause problems.
+
 ## Disclaimers
 Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  Some parts of these scripts run as root.  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
 

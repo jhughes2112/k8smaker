@@ -65,15 +65,3 @@ scp -i "$HOME/.ssh/$CLUSTERNAME" ~/.kube/config "$SSHUSERNAME"@"$1":~/.kube/conf
 # give the new node the role of 'worker'
 kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/worker="
 
-# Once you add a worker node, we mark the control plane as non-schedulable, since we specified for it to not handle work.
-if [[ "$CONTROLISWORKER" -eq "0" ]]; then
-   kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master=NoSchedule"
-   kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master='':NoSchedule
-   echo "$THISHOSTNAME will no longer be a worker."
-else
-   kubectl label nodes "$THISHOSTNAME" --overwrite "node-role.kubernetes.io/master="
-   if kubectl get node/"$THISHOSTNAME" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/master"; then
-      kubectl taint nodes "$THISHOSTNAME" node-role.kubernetes.io/master:NoSchedule-
-   fi
-   echo "$THISHOSTNAME will stay as a worker."
-fi
