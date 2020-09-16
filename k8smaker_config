@@ -38,5 +38,5 @@ CONTROLPLANEENDPOINT="control-nodes"
 # These let you control the versions of packages being installed.  I have no way to guarantee any
 # combination will work except those I have checked in together (which means I tested them myself).
 KUBERNETESVERSION="1.19.1"
-ISTIOVERSION="1.7.0"
+ISTIOVERSION="1.6.9"
 CALICOVERSION="v3.16.1"
