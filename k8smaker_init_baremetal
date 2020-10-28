@@ -163,7 +163,7 @@ curl -L https://git.io/getLatestIstio | ISTIO_VERSION=$ISTIOVERSION sh - >/dev/n
 sudo mv ./istio-$ISTIOVERSION/bin/istioctl /usr/local/bin
 rm -rf istio-$ISTIOVERSION
 istioctl manifest generate --set profile=empty --set components.base.enabled=true > istio_1.yaml
-istioctl manifest generate --set values.grafana.enabled=false --set values.prometheus.enabled=false --set values.kiali.enabled=false --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana.default.svc.cluster.local:3000" --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
+istioctl manifest generate --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
 kubectl create ns istio-system
 kubectl apply -f istio_1.yaml
 kubectl apply -f istio_2.yaml

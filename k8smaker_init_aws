@@ -172,7 +172,7 @@ curl -L https://git.io/getLatestIstio | ISTIO_VERSION=$ISTIOVERSION sh - >/dev/n
 sudo mv ./istio-$ISTIOVERSION/bin/istioctl /usr/local/bin
 rm -rf istio-$ISTIOVERSION
 istioctl manifest generate --set profile=empty --set components.base.enabled=true > istio_1.yaml
-istioctl manifest generate --set values.grafana.enabled=false --set values.prometheus.enabled=false --set values.kiali.enabled=false --set "values.kiali.dashboard.jaegerURL=http://jaeger-query:16686" --set "values.kiali.dashboard.grafanaURL=http://grafana.default.svc.cluster.local:3000" --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
+istioctl manifest generate --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
 kubectl create ns istio-system
 kubectl apply -f istio_1.yaml
 # inject AWS annotation for NLB here for workers.  Also, the reason we do this in a second pass is to allow the CRDs to finish registration, as Istio usually fails if it's all-in-one-go.
