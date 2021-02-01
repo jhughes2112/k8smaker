@@ -43,6 +43,7 @@ if command docker 2>/dev/null; then
    docker stop $(docker ps -q)
    docker rm $(docker ps -aq)
    sudo systemctl stop docker
+   sudo rm /lib/systemd/system/docker.socket
 fi
 sudo apt-mark unhold kubelet kubeadm kubectl
 sudo apt-get purge -y kubelet kubeadm kubectl
