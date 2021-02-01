@@ -23,7 +23,7 @@ sudo apt-get install -y apt-transport-https ca-certificates curl software-proper
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update 
-sudo apt-get install -y containerd.io
+sudo apt-get install -y containerd.io docker-ce docker-ce-cli
 sudo tee /etc/docker/daemon.json <<EOF >/dev/null
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
