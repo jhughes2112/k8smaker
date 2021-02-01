@@ -61,9 +61,10 @@ Because there is a plugin called a "cloud provider" for AWS that knows how to au
 -- Associate the k8s-contol-node IAM role with your initial instance (either when creating it, or after the fact, but before trying to run k8s_init_aws)
 -- You can assign this after creating your instance by clicking EC2 -> Instances -> right click your instance and go to Security -> Modify IAM Role, then select k8s-control-node from the drop down.
 -- Any worker nodes can be created with the k8s-worker IAM role.
+-- For ALL nodes, add a tag with the name being "kubernetes.io/cluster/cluster-name" and the value being the CLUSTERNAME you set in k8s_config
 - Go to the Security Groups and add a group.
 -- You'll probably want port 80, 443 open to everyone, but 22 (ssh) locked down to just your IP address.
--- Add a tag like this, replacing [cluster-name] with the CLUSTERNAME you have in k8s_config: kubernetes.io/cluster/[cluster-name]
+-- Add this tag, with the value being the CLUSTERNAME you set in k8s_config: kubernetes.io/cluster/cluster-name
 - Go to the VPC service.
 -- Add the same tag to the Subnet you're using.
 -- Add the same tag to the Route Table.
