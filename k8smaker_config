@@ -1,23 +1,25 @@
 #!/bin/bash
 
 # If you have an SSD device, declare it here and the script will make sure it's mounted
-# whereever DATAFOLDER isi.  It's your job to make sure it's partitioned (use parted) and 
-# formatted (use mkfs.ext4) first.  I don't do thisi for you, in case there's other stuff
+# whereever DATAFOLDER is.  It's your job to make sure it's partitioned (use parted) and 
+# formatted (use mkfs.ext4) first.  I don't do this for you, in case there's other stuff
 # on the drive already.
-SSD="/dev/nvme0n1"
+#SSD="/dev/nvme0n1"
+SSD="/dev/no-ssd-device"
 
 # Even if you have no SSD, this is the root of where Docker and etcd data will live.
 # You must specify this folder to be SOMEWHERE, as /docker and /etcd are mounted beneath it.
-DATAFOLDER="/mnt/nvme"
+DATAFOLDER="/mnt/data"
 
 # This script doesn't use a randomized bootstrap token, nor does it expire.  Slight security issue.
 # Definitely change this, but it must be EXACTLY this many letters long.
 BOOTSTRAPTOKEN="secret.bootstraptokenxx"
 
 # To select your cluster, you do this: kubectl config use-context CLUSTERNAME
-CLUSTERNAME="metalgods"
+CLUSTERNAME="testcluster"
 
-# Can be any subnet, but CLUSTERDNS needs to be on the SERVICESUBNET
+# Can be any subnet, but CLUSTERDNS needs to be on the SERVICESUBNET.  This is where pods will be
+# running, so don't pick a subnet you already have devices on unless you know what you're doing.
 SERVICESUBNET="10.99.0.0/16"
 CLUSTERDNS="10.99.0.10"
 
@@ -25,7 +27,7 @@ CLUSTERDNS="10.99.0.10"
 PODSUBNET="10.98.0.0/16"
 
 # This is the username used when SSH'ing into machines
-SSHUSERNAME="jhughes"
+SSHUSERNAME="ubuntu"
 
 # DO NOT PUT AN IP ADDRESS HERE!  You cannot change this value after creating the cluster.
 # BareMetal: Leave it alone.  The name is added to the /etc/hosts on each node, which allows
@@ -37,6 +39,6 @@ CONTROLPLANEENDPOINT="control-nodes"
 
 # These let you control the versions of packages being installed.  I have no way to guarantee any
 # combination will work except those I have checked in together (which means I tested them myself).
-KUBERNETESVERSION="1.19.1"
+KUBERNETESVERSION="1.20.1"
 ISTIOVERSION="1.6.9"
-CALICOVERSION="v3.16.1"
+CALICOVERSION="v3.17.1"

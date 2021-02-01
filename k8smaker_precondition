@@ -73,7 +73,7 @@ else
 fi
 
 # Performance improves if you disable Transparent Huge Pages.
-sudo apt-get install -y hugepages
+sudo apt-get install -y libhugetlbfs-bin
 sudo tee /etc/rc.local <<EOF >/dev/null
 #!/bin/bash
 hugeadm --thp-never

@@ -88,6 +88,7 @@ authorization:
   webhook:
     cacheAuthorizedTTL: 0s
     cacheUnauthorizedTTL: 0s
+cgroupDriver: systemd
 clusterDNS:
 - $CLUSTERDNS
 clusterDomain: cluster.local
@@ -98,15 +99,18 @@ healthzBindAddress: 127.0.0.1
 healthzPort: 10248
 httpCheckFrequency: 0s
 imageMinimumGCAge: 0s
+logging: {}
 nodeStatusReportFrequency: 0s
 nodeStatusUpdateFrequency: 0s
+resolvConf: /run/systemd/resolve/resolv.conf
 rotateCertificates: true
 runtimeRequestTimeout: 0s
+shutdownGracePeriod: 0s
+shutdownGracePeriodCriticalPods: 0s
 staticPodPath: /etc/kubernetes/manifests
 streamingConnectionIdleTimeout: 0s
 syncFrequency: 0s
 volumeStatsAggPeriod: 0s
-cgroupDriver: systemd
 EOF
 
 # Actually create the cluster with just the control,etcd on this node, but do so AS root in root's own shell.

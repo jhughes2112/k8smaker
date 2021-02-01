@@ -20,15 +20,19 @@ if kubectl get node "$1" --no-headers 2>&1 | grep -q "not found"; then
    exit 1
 fi
 
-
+# use both control-plane and master, for now, until master is retired
 if [[ "$2" == "noschedule" ]]; then
    echo "Setting $1 to NOT schedule workloads."
+   kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/control-plane=NoSchedule"
    kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/master=NoSchedule"
+   kubectl taint nodes "$1" node-role.kubernetes.io/control-plane='':NoSchedule
    kubectl taint nodes "$1" node-role.kubernetes.io/master='':NoSchedule
 else
    echo "Setting $1 to schedule workloads."
+   kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/control-plane="
    kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/master="
-   if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/master"; then
+   if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/control-plane"; then
+      kubectl taint nodes "$1" node-role.kubernetes.io/control-plane:NoSchedule-
       kubectl taint nodes "$1" node-role.kubernetes.io/master:NoSchedule-
    fi
 fi
