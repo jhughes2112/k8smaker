@@ -47,7 +47,7 @@ fi
 sudo apt-mark unhold kubelet kubeadm kubectl
 sudo apt-get purge -y kubelet kubeadm kubectl
 sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli containerd runc containerd.io >/dev/null 2>&1
-sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce  
+sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce containerd.io  
 sudo rm -rf /etc/kubernetes /var/lib/etcd /var/lib/kubelet /var/lib/docker /etc/docker /var/run/docker.sock /etc/cni/net.d
 if [[ -d $DATAFOLDER ]]; then
    sudo rm -rf "$DATAFOLDER"/etcd "$DATAFOLDER"/docker
