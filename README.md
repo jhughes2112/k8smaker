@@ -16,7 +16,7 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
 - `git clone https://github.com/jhughes2112/k8smaker.git`
 - `cd k8smaker`
 - Edit **k8smaker_config** and set cluster name, username you will use for ssh (often **ubuntu**), change the bootstrap token, change the control node name to a load balancer DNS entry if you plan to use one, etc.
-- `./k8smaker_init_aws` will fully configure and set up a Kubernetes cluster on the local machine with etcd,control,worker roles.
+- `./k8smaker_init_aws` will fully configure and set up a Kubernetes cluster on the local machine with etcd,control,worker roles, but requires some permissions setup (see below)
 
 ## For each worker node
 - `ssh CONTROL_NODE`
@@ -25,10 +25,10 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
 
 ## Cluster Configuration
  - Bare metal or AWS. Easy to add more cloud hosts.
- -- Ubuntu 18.04LTS
- -- **Kubernetes** 1.19.1
+ -- Ubuntu 20.04LTS
+ -- **Kubernetes** 1.20.1
  -- **Istio** 1.7.1 for ingress and mesh routing
- -- **Calico** 3.16.1 for networking automatically configured to talk to secured etcd
+ -- **Calico** 3.17.1 for networking automatically configured to talk to secured etcd
  -- These versions can be changed in one place in the config file, but once you deploy a cluster, don't change them.
  - etcd and control plane are stacked on control nodes
  -- A smaller machine will suffice to manage the cluster (2+CPU, 2+GB RAM)
@@ -42,6 +42,32 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
  - All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/) installed, but don't worry about setting up keys.  That's built in.
  - All nodes need the same username (often `ubuntu` but can be anything), and needs `sudo` access.
  - All scripts are to be executed on the `control-node` machine.
+
+## AWS
+Because there is a plugin called a "cloud provider" for AWS that knows how to automatically create load balancers for you, and tag resources as they are created so they know how to remove them later, you have to add some permissions as IAM roles for the `control-node` and a more limited set of permissions for the `worker` nodes.
+- Go to your AWS console and open the IAM service.
+-- Go to the left side and click Policies.  Create Policy.  Click JSON.
+-- Copy the control-plane policy from this webpage https://kubernetes.github.io/cloud-provider-aws/prerequisites.html and replace the JSON contents with it.  Click Review Policy.
+-- Name it k8s-control-node.  Click Create Policy.
+-- Create Policy.  Click JSON
+-- Copy the node policy from this webpage https://kubernetes.github.io/cloud-provider-aws/prerequisites.html and replace the JSON contents with it.  Click Review Policy.
+-- Name it k8s-worker.  Click Create Policy.
+-- Now you have two policies, go back to the IAM dashboard and click Roles on the left.  Create Role.
+-- Leave AWS Service selected, and click EC2.  Click Next: Permissions.  
+-- Type k8s-control-node in the search box and select it.  Next: Tags.  Next: Review
+-- Name the role k8s-control-node.
+-- Repeat this process to create a role with k8s-worker
+- Go to the EC2 service.
+-- Associate the k8s-contol-node IAM role with your initial instance (either when creating it, or after the fact, but before trying to run k8s_init_aws)
+-- You can assign this after creating your instance by clicking EC2 -> Instances -> right click your instance and go to Security -> Modify IAM Role, then select k8s-control-node from the drop down.
+-- Any worker nodes can be created with the k8s-worker IAM role.
+- Go to the Security Groups and add a group.
+-- You'll probably want port 80, 443 open to everyone, but 22 (ssh) locked down to just your IP address.
+-- Add a tag like this, replacing [cluster-name] with the CLUSTERNAME you have in k8s_config: kubernetes.io/cluster/[cluster-name]
+- Go to the VPC service.
+-- Add the same tag to the Subnet you're using.
+-- Add the same tag to the Route Table.
+- Finally, note that you will (after configuring your cluster) want to `kubectl apply -f https://raw.githubusercontent.com/kubernetes/kubernetes/master/cluster/addons/storage-class/aws/default.yaml` so that you can use a storage class called `gp2` that gives you dynamic EBS volume bindings.
 
 ## k8smaker_config
 Edit this file to set your cluster name, username, etc.  This is shared across all the scripts that need it.  See comments for what each variable means.
@@ -59,13 +85,13 @@ One little quirk is that Istio refuses to complete installation without a worker
 ## k8smaker_addworker_aws/baremetal
 You run this on the `control-node`, passing it the **IP or hostname** of the node you want to be a worker for the cluster.  First, it generates a Bash script called at `~/CLUSTERNAME/k8smaker_addworker_HOSTNAME`, so you can inspect what it's doing.  The script then configures the new node with an ssh key the cluster uses for passwordless operation, copies the customized Bash script over, then remote executes it.  You will probably need to accept the SSH signature, mayneed to provide an SSH password, then give the password to allow sudo access on that machine, since some commands require root to configure it.
 
-## k8smaster_drain
+## k8smaker_drain
 Run this on the `control-node`, pass in the **nodename** to drain.  This simply tries to drain pods off the specified node.  It's still part of the cluster, just not in use.  Some things don't drain nicely, but I'll handle that better in the future--hence the script.  If you have a node you want to take down, drain it first.  This will eventually manage re-scaling stateful apps that need to be rescheduled to other nodes, but for now just executes the correct kubectl drain command for you.
 
-## k8smaster_undrain
+## k8smaker_undrain
 Run this on the `control-node`, pass in the **nodename** to drain.  This puts a drained node back into service.  Simple as that.  Technically, the right name is uncordon, but it ruins the symmetry of the naming, sorry.
 
-## k8smaster_deleteall
+## k8smaker_deleteall
 You run this on the `control-node`, passing it the **IP or hostname** of the node you want to completely remove from the cluster.  This constructs a script to run on the specified host, copies and remotely executes it on that host, then attempts to delete the node from the cluster on the off-chance it's unable to reach it (crashed, network down, whatever).  If it successfully executes the script, everything related to Docker, Kubernetes, etcd, and so forth is deleted off the machine and uninstalled.  It's vicious, so be careful.  Always try to drain first, or you may experience data loss depending on your workload.  Note, this will also work on control nodes (you can pass `localhost` to it to wipe the current machine).
 
 ## k8smaker_setcontrolnode

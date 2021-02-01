@@ -51,7 +51,6 @@ localAPIEndpoint:
 nodeRegistration:
   kubeletExtraArgs:
     cloud-provider: aws
-  criSocket: /var/run/dockershim.sock
 ---
 kind: ClusterConfiguration
 apiServer:
