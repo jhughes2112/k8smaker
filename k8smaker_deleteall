@@ -38,13 +38,16 @@ sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sud
 # Get rid of anything that might cause conflicts, old versions, etc
 if command kubelet 2>/dev/null; then
    sudo systemctl stop kubelet
+   sudo systemctl disable kubelet
 fi
 if command docker 2>/dev/null; then
    docker stop $(docker ps -q)
    docker rm $(docker ps -aq)
    sudo systemctl stop docker
-   sudo rm /lib/systemd/system/docker.socket
+   sudo systemctl disable docker
+   sudo rm -rf /lib/systemd/system/docker.socket*
 fi
+sudo systemctl daemon-reload
 sudo apt-mark unhold kubelet kubeadm kubectl
 sudo apt-get purge -y kubelet kubeadm kubectl
 sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli containerd runc containerd.io >/dev/null 2>&1
