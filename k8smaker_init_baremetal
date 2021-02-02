@@ -160,20 +160,12 @@ spec:
   kubeconfig: "$HOME/.kube/config"
 EOF
 
-# Download and install Istio with all the goodies enabled, then enable sidecar injection on the default namespace
-echo "Installing Istio"
+# Download and install Contour for Ingress
+echo "Installing Contour"
 pushd ~/"$CLUSTERNAME"
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=$ISTIOVERSION sh - >/dev/null
-sudo mv ./istio-$ISTIOVERSION/bin/istioctl /usr/local/bin
-rm -rf istio-$ISTIOVERSION
-istioctl manifest generate --set profile=empty --set components.base.enabled=true > istio_1.yaml
-istioctl manifest generate --set values.global.jwtPolicy=first-party-jwt >istio_2.yaml
-kubectl create ns istio-system
-kubectl apply -f istio_1.yaml
-kubectl apply -f istio_2.yaml
+curl -L  https://raw.githubusercontent.com/projectcontour/contour-operator/$CONTOURVERSION/examples/operator/operator.yaml -o contour-operator.yaml
+kubectl apply -f contour-operator.yaml
 popd
-# do NOT enable the sidecar.  It breaks or slows down all your HTTPS and SSH connections.
-# kubectl label namespace default istio-injection=enabled
 
 # allow this node to run workloads, otherwise Istio will not start up.
 source ./k8smaker_setcontrolnode $(hostname) schedule
