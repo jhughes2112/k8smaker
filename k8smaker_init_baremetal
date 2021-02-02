@@ -163,8 +163,10 @@ EOF
 # Download and install Contour for Ingress
 echo "Installing Contour"
 pushd ~/"$CLUSTERNAME"
-curl -L  https://raw.githubusercontent.com/projectcontour/contour-operator/$CONTOURVERSION/examples/operator/operator.yaml -o contour-operator.yaml
-kubectl apply -f contour-operator.yaml
+curl -L https://raw.githubusercontent.com/projectcontour/contour/release-$CONTOURVERSION/examples/render/contour.yaml -o contour.yaml
+# inject AWS annotation for NLB here for workers.
+sed -i 's/service.beta.kubernetes.io\/aws-load-balancer-backend-protocol: tcp/service.beta.kubernetes.io\/aws-load-balancer-type: nlb/' contour.yaml
+kubectl apply -f contour.yaml
 popd
 
 # allow this node to run workloads, otherwise Istio will not start up.
