@@ -12,8 +12,6 @@ sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/
 
 mkdir -p ~/"$CLUSTERNAME"
 INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
-CALICOSCRIPT1=~/"$CLUSTERNAME/calico1.yaml"
-CALICOSCRIPT2=~/"$CLUSTERNAME/calico2.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
@@ -139,8 +137,10 @@ mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
-# Install Calico w/etcd for networking
-cat >"$CALICOSCRIPT2" <<EOF
+pushd ~/"$CLUSTERNAME"
+
+# Install Calico operator for pod networking
+cat >calico2.yaml <<EOF
 kind: Installation
 apiVersion: operator.tigera.io/v1
 metadata:
@@ -157,24 +157,23 @@ spec:
       nodeSelector: all()
 EOF
 
-curl https://docs.projectcalico.org/manifests/tigera-operator.yaml -o "$CALICOSCRIPT1"
-kubectl apply -f "$CALICOSCRIPT1"
-kubectl apply -f "$CALICOSCRIPT2"
-
-# dump out early so I can do manual testing for now
-exit 1  
+curl https://docs.projectcalico.org/manifests/tigera-operator.yaml -o calico1.yaml
+kubectl apply -f calico1.yaml
+kubectl apply -f calico2.yaml
 
 # Install AWS cloud provider
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/rbac.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/aws-cloud-controller-manager-daemonset.yaml
+curl https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/rbac.yaml -o aws1.yaml
+curl https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/aws-cloud-controller-manager-daemonset.yaml -o aws2.yaml
+kubectl apply -f aws1.yaml
+kubectl apply -f aws2.yaml
 
 # Download and install Contour for Ingress
 echo "Installing Contour"
-pushd ~/"$CLUSTERNAME"
 curl -L https://raw.githubusercontent.com/projectcontour/contour/release-$CONTOURVERSION/examples/render/contour.yaml -o contour.yaml
 # inject AWS annotation for NLB here for workers.
 sed -i 's/service.beta.kubernetes.io\/aws-load-balancer-backend-protocol: tcp/service.beta.kubernetes.io\/aws-load-balancer-type: nlb/' contour.yaml
 kubectl apply -f contour.yaml
+
 popd
 
 # allow this node to run workloads, otherwise Istio will not start up.
