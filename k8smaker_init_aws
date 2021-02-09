@@ -53,18 +53,17 @@ nodeRegistration:
     cloud-provider: aws
 ---
 kind: ClusterConfiguration
+apiVersion: kubeadm.k8s.io/v1beta2
 apiServer:
   timeoutForControlPlane: 4m0s
   extraArgs:
     cloud-provider: aws
-apiVersion: kubeadm.k8s.io/v1beta2
 certificatesDir: /etc/kubernetes/pki
 clusterName: $CLUSTERNAME
 controllerManager:
   extraArgs:
     cloud-provider: aws
     configure-cloud-routes: "false"
-    address: 0.0.0.0
 dns:
   type: CoreDNS
 etcd:
@@ -77,9 +76,7 @@ networking:
   serviceSubnet: $SERVICESUBNET
   podSubnet: $PODSUBNET
 controlPlaneEndpoint: $CONTROLPLANEENDPOINT
-scheduler:
-  extraArgs:
-    address: 0.0.0.0
+scheduler: {}
 ---
 kind: KubeletConfiguration
 apiVersion: kubelet.config.k8s.io/v1beta1
