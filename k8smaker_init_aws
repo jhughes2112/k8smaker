@@ -161,11 +161,13 @@ curl https://docs.projectcalico.org/manifests/tigera-operator.yaml -o calico1.ya
 kubectl apply -f calico1.yaml
 kubectl apply -f calico2.yaml
 
-# Install AWS cloud provider
+# Install AWS cloud provider and storage class "gp2" for EBS volumes
 curl https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/rbac.yaml -o aws1.yaml
 curl https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/aws-cloud-controller-manager-daemonset.yaml -o aws2.yaml
+curl https://raw.githubusercontent.com/kubernetes/kubernetes/master/cluster/addons/storage-class/aws/default.yaml -o aws3.yaml
 kubectl apply -f aws1.yaml
 kubectl apply -f aws2.yaml
+kubectl apply -f aws3.yaml
 
 # Download and install Contour for Ingress
 echo "Installing Contour"

@@ -8,10 +8,9 @@ fi
 source ./k8smaker_config
 
 if [[ "$1" == '' || "$2" == '' ]]; then
-   echo "Pass IP or hostname of a CONTROL node as the first argument."
-   echo "Pass either schedule or noschedule as the second argument."
+   echo "This changes whether a node is allowed to schedule pods as a worker or not."
    echo ""
-   echo "./k8smaker_setcontrolnode nodename schedule"
+   echo "./k8smaker_setcontrolnode nodename [no]schedule"
    exit 1
 fi
 
@@ -31,8 +30,10 @@ else
    echo "Setting $1 to schedule workloads."
    kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/control-plane="
    kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/master="
+   if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/master"; then
+      kubectl taint nodes "$1" node-role.kubernetes.io/master:NoSchedule-
+   fi
    if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/control-plane"; then
       kubectl taint nodes "$1" node-role.kubernetes.io/control-plane:NoSchedule-
-      kubectl taint nodes "$1" node-role.kubernetes.io/master:NoSchedule-
    fi
 fi
