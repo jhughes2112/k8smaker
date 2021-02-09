@@ -50,19 +50,19 @@ localAPIEndpoint:
   bindPort: 6443
 nodeRegistration:
   kubeletExtraArgs:
-    cloud-provider: aws
+    cloud-provider: external
 ---
 kind: ClusterConfiguration
 apiVersion: kubeadm.k8s.io/v1beta2
 apiServer:
   timeoutForControlPlane: 4m0s
   extraArgs:
-    cloud-provider: aws
+    cloud-provider: external
 certificatesDir: /etc/kubernetes/pki
 clusterName: $CLUSTERNAME
 controllerManager:
   extraArgs:
-    cloud-provider: aws
+    cloud-provider: external
     configure-cloud-routes: "false"
 dns:
   type: CoreDNS
@@ -126,6 +126,13 @@ sudo -i kubeadm init --config="$INITSCRIPT" --upload-certs
 mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# dump out early so I can do manual testing for now
+exit 1  
+
+# Install AWS cloud provider
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/aws-cloud-controller-manager-daemonset.yaml
 
 # Install Calico w/etcd for networking
 curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o "$CALICOSCRIPT"
