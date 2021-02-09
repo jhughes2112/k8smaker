@@ -24,24 +24,24 @@ These scripts are built to work fine on baremetal or aws, and have slight differ
 - `./k8smaker_addworker_aws ip-172-16-1-144.ec2.internal` will construct a script to run on the specified host, copy it over then run it for you.  All scripts are stored both on the control-node in your home folder as well as on the remote host it was executed on.
 
 ## Cluster Configuration
- - Bare metal or AWS. Easy to add more cloud hosts.
- -- Ubuntu 20.04LTS
- -- **Kubernetes** 1.20.1
- -- **Istio** 1.7.1 for ingress and mesh routing
- -- **Calico** 3.17.1 for networking automatically configured to talk to secured etcd
- -- These versions can be changed in one place in the config file, but once you deploy a cluster, don't change them.
- - etcd and control plane are stacked on control nodes
- -- A smaller machine will suffice to manage the cluster (2+CPU, 2+GB RAM)
- -- Setup for High Availability control cluster, even if you only have one to start with
- - Pods run on worker nodes
- -- Use beefy machines for these
- - On AWS, adding a worker also generates an NLB that automatically adds worker nodes when joined to the cluster.
+- Bare metal or AWS. Easy to add more cloud hosts.
+-- Ubuntu 20.04LTS
+-- **Kubernetes** 1.20.1
+-- **Contour** 1.12 for ingress
+-- **Calico** 3.17.1 for pod networking
+-- These versions can be changed in one place in the config file, but once you deploy a cluster, don't change them.
+- etcd and control plane are stacked on control nodes
+-- A smaller machine will suffice to manage the cluster (2+CPU, 2+GB RAM)
+-- Setup for High Availability control cluster, even if you only have one to start with
+- Pods run on worker nodes
+-- Use beefy machines for these
+- On AWS, the latest cloud-provider plugin is installed and should generate load balancers automatically as workers or additional control-plane nodes are added.
 
 ## Prerequisites for k8smaker
- - All nodes need to be a `systemd`-based Ubuntu 18.04LTS (or similar Debian distro)
- - All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/) installed, but don't worry about setting up keys.  That's built in.
- - All nodes need the same username (often `ubuntu` but can be anything), and needs `sudo` access.
- - All scripts are to be executed on the `control-node` machine.
+- All nodes need to be a `systemd`-based Ubuntu 20.04LTS
+- All nodes need [OpenSSH](https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-20-04/) installed, but don't worry about setting up keys.  That's built in.
+- All nodes need the same username (often `ubuntu` but can be anything), with `sudo` access.
+- All scripts are to be executed on the `control-node` machine.
 
 ## AWS
 Because there is a plugin called a "cloud provider" for AWS that knows how to automatically create load balancers for you, and tag resources as they are created so they know how to remove them later, you have to add some permissions as IAM roles for the `control-node` and a more limited set of permissions for the `worker` nodes.
@@ -100,7 +100,7 @@ You run this on the `control-node`, passing it the **IP or hostname** of the nod
 You can use this script to change whether a control node will run workloads or not.  It's very simple.  Just pass it the **nodename** of the control node you want to change, followed by either **schedule** or **noschedule**, and it alters the labels and taints to allow kubelet to schedule pods there or not.  Be very careful, though, not to pass in any non-control node names.  It's not safe to do so and may cause problems.
 
 ## Disclaimers
-Tested on Ubuntu 18.04LTS only.  May run on any reasonably vanilla `systemd` based Debian-based Linux.  Do not run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  Some parts of these scripts run as root.  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
+Old versions of this package used Ubuntu 18.04LTS and Istio for routing.  Currently, I'm using Ubuntu 20.04LTS and Contour.  I have absolutely no way to help you make it run on any other combination.  I hope this is a good starting point for your exploration of Kubernetes.  **Do not** run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  Some parts of these scripts run as root.  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
 
 ## TODO
 - Add a script to add an etcd,control node to the cluster, or change init to start with a 1-, 3- or 5-node control plane.
