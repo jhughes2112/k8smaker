@@ -12,7 +12,8 @@ sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/
 
 mkdir -p ~/"$CLUSTERNAME"
 INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
-CALICOSCRIPT=~/"$CLUSTERNAME/calicoetcd.yaml"
+CALICOSCRIPT1=~/"$CLUSTERNAME/calico1.yaml"
+CALICOSCRIPT2=~/"$CLUSTERNAME/calico2.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
@@ -57,7 +58,7 @@ apiVersion: kubeadm.k8s.io/v1beta2
 caCertPath: /etc/kubernetes/pki/ca.crt
 discovery:
   bootstrapToken:
-    apiServerEndpoint: $CONTROLNODEIP:6443
+    apiServerEndpoint: $CONTROLPLANEENDPOINT:6443
     token: $BOOTSTRAPTOKEN
     unsafeSkipCAVerification: true
   timeout: 5m0s
@@ -138,50 +139,34 @@ mkdir -p $HOME/.kube
 sudo cp -f /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
+# Install Calico w/etcd for networking
+cat >"$CALICOSCRIPT2" <<EOF
+kind: Installation
+apiVersion: operator.tigera.io/v1
+metadata:
+  name: default
+spec:
+  # Configures Calico networking.
+  calicoNetwork:
+    # Note: The ipPools section cannot be modified post-install.
+    ipPools:
+    - blockSize: 26
+      cidr: $PODSUBNET
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+EOF
+
+curl https://docs.projectcalico.org/manifests/tigera-operator.yaml -o "$CALICOSCRIPT1"
+kubectl apply -f "$CALICOSCRIPT1"
+kubectl apply -f "$CALICOSCRIPT2"
+
 # dump out early so I can do manual testing for now
 exit 1  
 
 # Install AWS cloud provider
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/rbac.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/master/manifests/aws-cloud-controller-manager-daemonset.yaml
-
-# Install Calico w/etcd for networking
-curl https://docs.projectcalico.org/manifests/calico-etcd.yaml -o "$CALICOSCRIPT"
-sed -i 's%etcd_ca: ""   # "/calico-secrets/etcd-ca"%etcd_ca: "/calico-secrets/etcd-ca"%g' "$CALICOSCRIPT"
-sed -i 's%etcd_cert: "" # "/calico-secrets/etcd-cert"%etcd_cert: "/calico-secrets/etcd-cert"%g' "$CALICOSCRIPT"
-sed -i 's%etcd_key: ""  # "/calico-secrets/etcd-key"%etcd_key: "/calico-secrets/etcd-key"%g' "$CALICOSCRIPT"
-
-SEDCMD="sed -i 's%etcd_endpoints: \"http://<ETCD_IP>:<ETCD_PORT>\"%etcd_endpoints: \"https://${CONTROLNODEIP}:2379\"%g' $CALICOSCRIPT"
-eval "$SEDCMD"
-
-ETCDKEY=$(sudo cat /etc/kubernetes/pki/etcd/peer.key | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-key: null%etcd-key: \"$ETCDKEY\"%g' $CALICOSCRIPT"
-eval "$SEDCMD"
-
-ETCDCERT=$(sudo cat /etc/kubernetes/pki/etcd/peer.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-cert: null%etcd-cert: \"$ETCDCERT\"%g' $CALICOSCRIPT"
-eval "$SEDCMD"
-
-ETCDCA=$(sudo cat /etc/kubernetes/pki/etcd/ca.crt | base64 -w 0)
-SEDCMD="sed -i 's%# etcd-ca: null%etcd-ca: \"$ETCDCA\"%g' $CALICOSCRIPT"
-eval "$SEDCMD"
-
-# Fix Calico's IP autodetection to actually find a valid interface.  Why this isn't the default blows my mind.
-sed -i -e '/^            # Auto-detect the BGP IP address.*/i\            # Set auto-detect method to be publicly routable, whatever that interface may be\n            - name: IP_AUTODETECTION_METHOD\n              value: "can-reach=8.8.8.8"' $CALICOSCRIPT 
-
-echo "Installing Calico, configuring calcicoctl"
-kubectl apply -f "$CALICOSCRIPT"
-sudo curl -L  https://github.com/projectcalico/calicoctl/releases/download/$CALICOVERSION/calicoctl -o /usr/local/bin/calicoctl
-sudo chmod a+x /usr/local/bin/calicoctl
-sudo mkdir -p /etc/calico
-sudo tee /etc/calico/calicoctl.cfg >/dev/null <<EOF
-apiVersion: projectcalico.org/v3
-kind: CalicoAPIConfig
-metadata:
-spec:
-  datastoreType: "kubernetes"
-  kubeconfig: "$HOME/.kube/config"
-EOF
 
 # Download and install Contour for Ingress
 echo "Installing Contour"
