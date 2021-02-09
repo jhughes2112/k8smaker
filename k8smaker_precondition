@@ -16,14 +16,16 @@ fi
 if command kubelet 2>/dev/null; then
    sudo systemctl stop kubelet
 fi
+if command docker 2>/dev/null; then
+   sudo systemctl stop docker
+fi
 sudo apt-mark unhold kubelet kubeadm kubectl
 sudo apt-get purge -y kubelet kubeadm kubectl
 sudo apt-get update >/dev/null 2>&1
 sudo apt-get install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common gnupg2 nfs-common open-iscsi
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update 
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+sudo apt-get install -y docker.io
 sudo mkdir /etc/docker
 sudo tee /etc/docker/daemon.json <<EOF >/dev/null
 {
@@ -105,10 +107,8 @@ EOF
 sudo apt-get update
 sudo apt-get install -y kubelet=$KUBERNETESVERSION-00 kubeadm=$KUBERNETESVERSION-00 kubectl=$KUBERNETESVERSION-00
 sudo apt-mark hold kubelet kubeadm kubectl
-sudo systemctl daemon-reload
-sudo systemctl restart docker
-sudo systemctl enable docker
-sudo systemctl restart kubelet
+sudo systemctl enable --now docker
+sudo systemctl enable --now kubelet
 
 # Add tab completion to bash for kubectl
 kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl >/dev/null
