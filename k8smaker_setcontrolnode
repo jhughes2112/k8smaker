@@ -28,12 +28,12 @@ if [[ "$2" == "noschedule" ]]; then
    kubectl taint nodes "$1" node-role.kubernetes.io/master='':NoSchedule
 else
    echo "Setting $1 to schedule workloads."
-   kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/control-plane="
-   kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/master="
+   kubectl label nodes "$1" node-role.kubernetes.io/control-plane-
+   kubectl label nodes "$1" node-role.kubernetes.io/master-
    if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/master"; then
-      kubectl taint nodes "$1" node-role.kubernetes.io/master:NoSchedule-
+      kubectl taint nodes "$1" node-role.kubernetes.io/master-
    fi
    if kubectl get node/"$1" -o custom-columns=TAINTS:.spec.taints --no-headers 2>&1 | grep -q "node-role.kubernetes.io/control-plane"; then
-      kubectl taint nodes "$1" node-role.kubernetes.io/control-plane:NoSchedule-
+      kubectl taint nodes "$1" node-role.kubernetes.io/control-plane-
    fi
 fi
