@@ -146,6 +146,6 @@ kubectl apply -f contour.yaml
 popd
 
 # allow this node to run workloads, otherwise Istio will not start up.
-source ./k8smaker_setcontrolnode $(hostname) schedule
+source ./k8smaker_setcontrolplane $(hostname) schedule
 
 echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"
