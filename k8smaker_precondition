@@ -88,7 +88,7 @@ sudo hugeadm --thp-never
 
 # Swapfile must be off to run k8s properly
 sudo swapoff -a >/dev/null 2>&1 || true
-sudo sed -i '/^\/swapfile/s/^/#/' /etc/fstab
+sudo sed -i '/^\/swap/s/^/#/' /etc/fstab
 
 # Configure prerequisites for Kubernetes
 sudo modprobe overlay
