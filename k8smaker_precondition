@@ -110,6 +110,7 @@ sudo apt-get update
 sudo apt-get install -y kubelet=$KUBERNETESVERSION-00 kubeadm=$KUBERNETESVERSION-00 kubectl=$KUBERNETESVERSION-00
 sudo apt-mark hold kubelet kubeadm kubectl
 sudo systemctl enable --now docker
+sudo chmod ou+r /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
 # sudo systemctl enable --now kubelet
 
 # Add tab completion to bash for kubectl
