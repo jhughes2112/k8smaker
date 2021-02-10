@@ -87,6 +87,9 @@ One little quirk is that Istio refuses to complete installation without a worker
 ## k8smaker_addworker_aws/baremetal
 You run this on the `control-node`, passing it the **IP or hostname** of the node you want to be a worker for the cluster.  First, it generates a Bash script called at `~/CLUSTERNAME/k8smaker_addworker_HOSTNAME`, so you can inspect what it's doing.  The script then configures the new node with an ssh key the cluster uses for passwordless operation, copies the customized Bash script over, then remote executes it.  You will probably need to accept the SSH signature, mayneed to provide an SSH password, then give the password to allow sudo access on that machine, since some commands require root to configure it.
 
+## k8smaker_addcontrolplane_aws/baremetal
+You run this on the `control-node`, passing it the **IP or hostname** of the node you want to be another node in the control-plane for the cluster.  It works very similarly to addworker, only for the additional flags required to treat it as a control node.
+
 ## k8smaker_drain
 Run this on the `control-node`, pass in the **nodename** to drain.  This simply tries to drain pods off the specified node.  It's still part of the cluster, just not in use.  Some things don't drain nicely, but I'll handle that better in the future--hence the script.  If you have a node you want to take down, drain it first.  This will eventually manage re-scaling stateful apps that need to be rescheduled to other nodes, but for now just executes the correct kubectl drain command for you.
 
@@ -96,11 +99,8 @@ Run this on the `control-node`, pass in the **nodename** to drain.  This puts a 
 ## k8smaker_deleteall
 You run this on the `control-node`, passing it the **IP or hostname** of the node you want to completely remove from the cluster.  This constructs a script to run on the specified host, copies and remotely executes it on that host, then attempts to delete the node from the cluster on the off-chance it's unable to reach it (crashed, network down, whatever).  If it successfully executes the script, everything related to Docker, Kubernetes, etcd, and so forth is deleted off the machine and uninstalled.  It's vicious, so be careful.  Always try to drain first, or you may experience data loss depending on your workload.  Note, this will also work on control nodes (you can pass `localhost` to it to wipe the current machine).
 
-## k8smaker_setcontrolnode
-You can use this script to change whether a control node will run workloads or not.  It's very simple.  Just pass it the **nodename** of the control node you want to change, followed by either **schedule** or **noschedule**, and it alters the labels and taints to allow kubelet to schedule pods there or not.  Be very careful, though, not to pass in any non-control node names.  It's not safe to do so and may cause problems.
+## k8smaker_setcontrolplane
+You can use this script to change whether a control node will run workloads or not.  It's very simple.  Just pass it the **nodename** of the control node you want to change, followed by either **schedule** or **noschedule**, and it alters the taints to allow kubelet to schedule pods there or not.  If you try passing a worker node's name to this script, you may regret it, so pay attention.
 
 ## Disclaimers
 Old versions of this package used Ubuntu 18.04LTS and Istio for routing.  Currently, I'm using Ubuntu 20.04LTS and Contour.  I have absolutely no way to help you make it run on any other combination.  I hope this is a good starting point for your exploration of Kubernetes.  **Do not** run these scripts on anything except a newly installed machine.  **Data loss is very possible.**  Some parts of these scripts run as root.  As with anything you download off the internet, running a script as `root` is dangerous and until it's proven trustworthy, it may destroy anything or everything it touches.  I promise this script doesn't intend to do that, but why should  you trust me?  **Read it over first, and if you see anything you are concerned with, don't run it!**  Even better, fix it and send me a pull request.
-
-## TODO
-- Add a script to add an etcd,control node to the cluster, or change init to start with a 1-, 3- or 5-node control plane.

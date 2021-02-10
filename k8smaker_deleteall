@@ -28,7 +28,10 @@ fi
 echo "$(hostname -f) will have all its Docker, Kubernetes, and Etcd data deleted! You have 5 seconds to cancel with Control-C"
 sleep 5
 
-# First, let kubeadm have a go at it.  But do it in root's own shell, to protect our .kube folder from permission squatting.
+# Before anything else, drain off the node.
+kubectl drain "$1" --delete-local-data --force --ignore-daemonsets
+
+# Then, let kubeadm have a go at it.  But do it in root's own shell, to protect our .kube folder from permission squatting.
 sudo -i kubeadm reset -f
 
 # Wipe IP tables back to normal

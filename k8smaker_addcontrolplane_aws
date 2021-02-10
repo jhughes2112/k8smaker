@@ -8,20 +8,20 @@ fi
 source ./k8smaker_config
 
 if [[ $1 = '' ]]; then
-   echo "Pass IP or hostname of the worker node as the first argument:"
-   echo "./k8smaker_addworker_baremetal worker1.local"
+   echo "Pass IP or hostname of the control-plane node as the first argument:"
+   echo "./k8smaker_addcontrolplane_aws control2.local"
    exit 1
 fi
 
 mkdir -p ~/"$CLUSTERNAME"
-ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1"
-KUBEADMSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1_join.yaml"
+ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addcontrolplane_$1"
+KUBEADMSCRIPT=~/"$CLUSTERNAME/k8smaker_addcontrolplane_$1_join.yaml"
 
 # this picks up your external facing IP address and hostname
 CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
 THISHOSTNAME=$(hostname -f)
 echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
-echo "Worker is $SSHUSERNAME@$1"
+echo "New control-plane node is $SSHUSERNAME@$1"
 echo "Script stored in $ADDSCRIPT"
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
@@ -35,11 +35,13 @@ ssh-copy-id -f -i "$HOME/.ssh/$CLUSTERNAME.pub" "$SSHUSERNAME"@"$1"
 echo "#!/bin/bash" >"$ADDSCRIPT"
 echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
 cat ./k8smaker_config >>"$ADDSCRIPT"
+echo '# AWS nodes must have $(hostname) == $(hostname -f) because somewhere in the middle of initialization, someone is using the short name, and it blows up.' >>"$ADDSCRIPT"
+echo 'sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)' >>"$ADDSCRIPT"
 cat ./k8smaker_precondition >>"$ADDSCRIPT"
 echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
 echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
-echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addworker_$1_join.yaml" >>"$ADDSCRIPT"
+echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addcontrolplane_$1_join.yaml --control-plane" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
 
 # Generate the kubeadm join script and copy it to the remote machine
@@ -55,6 +57,9 @@ discovery:
     caCertHashes: ["sha256:${DISCOVERYTOKEN}"]
   timeout: 5m0s
   tlsBootstrapToken: $BOOTSTRAPTOKEN
+nodeRegistration:
+  kubeletExtraArgs:
+    cloud-provider: aws
 EOF
 
 # copy the scripts to the new node and run it
@@ -67,4 +72,3 @@ scp -i "$HOME/.ssh/$CLUSTERNAME" ~/.kube/config "$SSHUSERNAME"@"$1":~/.kube/conf
 
 # give the new node the role of 'worker'
 kubectl label nodes "$1" --overwrite "node-role.kubernetes.io/worker="
-
