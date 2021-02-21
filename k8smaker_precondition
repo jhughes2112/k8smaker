@@ -100,6 +100,11 @@ net.ipv4.ip_forward = 1
 EOF
 sudo sysctl --system
 
+# Get docker running properly before trying to get kubelet going
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+sudo systemctl enable docker
+
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 sudo tee /etc/apt/sources.list.d/kubernetes.list <<EOF >/dev/null
 deb https://apt.kubernetes.io/ kubernetes-xenial main
@@ -109,9 +114,10 @@ EOF
 sudo apt-get update
 sudo apt-get install -y kubelet=$KUBERNETESVERSION-00 kubeadm=$KUBERNETESVERSION-00 kubectl=$KUBERNETESVERSION-00
 sudo apt-mark hold kubelet kubeadm kubectl
-sudo systemctl enable --now docker
 sudo chmod ou+r /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
-# sudo systemctl enable --now kubelet
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+sudo systemctl enable kubelet
 
 # Add tab completion to bash for kubectl
 kubectl completion bash | sudo tee /etc/bash_completion.d/kubectl >/dev/null
