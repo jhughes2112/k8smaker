@@ -59,7 +59,7 @@ discovery:
   tlsBootstrapToken: ${BOOTSTRAPTOKEN}
 controlPlane:
   localAPIEndpoint:
-    advertiseAddress: ${CONTROLPLANEENDPOINT}
+    advertiseAddress: ${NEWNODEIP}
     bindPort: 6443
   certificateKey: "${CERTIFICATEKEY}"
 EOF

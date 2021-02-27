@@ -12,6 +12,7 @@ sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/
 
 mkdir -p ~/"$CLUSTERNAME"
 INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
+CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
 echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
@@ -34,13 +35,13 @@ apiVersion: kubeadm.k8s.io/v1beta2
 bootstrapTokens:
 - groups:
   - system:bootstrappers:kubeadm:default-node-token
-  token: $BOOTSTRAPTOKEN
+  token: ${BOOTSTRAPTOKEN}
   ttl: 0s
   usages:
   - signing
   - authentication
 localAPIEndpoint:
-  advertiseAddress: $CONTROLPLANEENDPOINT
+  advertiseAddress: ${CONTROLNODEIP}
   bindPort: 6443
 nodeRegistration:
   kubeletExtraArgs:

@@ -34,10 +34,11 @@ SSHUSERNAME="ubuntu"
 # want this to be an external IP address, fine.  If you want to always ssh into a cluster node first,
 # pick an IP that is in the SERVICESUBNET.
 #CONTROLPLANEVIP="10.99.0.11"
-CONTROLPLANEVIP="10.0.0.230"
+CONTROLPLANEVIP="10.0.0.251"
 
 # You cannot change this value after creating the cluster.  So it should always be a name not an IP.
-# BareMetal: Leave it alone.  We patch /etc/hosts to point control-nodes to the CONTROLPLANEVIP.
+# BareMetal: Leave it alone.  Ideally, add control-nodes as a DNS entry so it resolves properly, but
+# if not, we patch /etc/hosts to point control-nodes to the CONTROLPLANEVIP manually on each node.
 # This is the software loade balanced vIP address.  Works fine whether you have 1 or more control nodes.
 # AWS: Put the actual name of your internal control plane load balancer here, if you plan
 # to use one.  Otherwise leave it alone.  You can always come back and sub in the LB's IP address

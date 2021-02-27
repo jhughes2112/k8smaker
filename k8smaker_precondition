@@ -28,6 +28,7 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-get update 
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+sudo systemctl stop docker
 sudo mkdir /etc/docker
 sudo tee /etc/docker/daemon.json <<EOF >/dev/null
 {
@@ -62,9 +63,14 @@ if [[ -b "$SSD" ]]; then
 fi
 
 # Make sure that $DATAFOLDER/docker is where things are stored rather than /var/lib/docker 
-SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock.*$%ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock -g $DATAFOLDER/docker%g' /lib/systemd/system/docker.service"
+SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock.*$%ExecStart=/usr/bin/dockerd -H unix:// --containerd=/run/containerd/containerd.sock --data-root=$DATAFOLDER/docker%g' /lib/systemd/system/docker.service"
 echo "Adding $DATAFOLDER to docker working folder"
 eval "sudo $SEDCMD"
+sudo chmod 644 /lib/systemd/system/docker.service
+
+# At least on baremetal, when DHCP tells Ubuntu 20.04 to use my local DNS resolver with .local as a suffix, it never does.  So I'm forcing it to.
+sudo rm /etc/resolv.conf
+sudo ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
 
 # it has been a problem in the past leaving old values in /etc/host so we explicitly remove those lines if present,
 # then check to see if the hostname still resolves (it may if it's a FQDN handled by a proper DNS server).
@@ -104,7 +110,7 @@ sudo sysctl --system
 
 # Get docker running properly before trying to get kubelet going
 sudo systemctl daemon-reload
-sudo systemctl restart docker
+sudo systemctl start docker
 sudo systemctl enable docker
 
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -116,7 +122,8 @@ EOF
 sudo apt-get update
 sudo apt-get install -y kubelet=$KUBERNETESVERSION-00 kubeadm=$KUBERNETESVERSION-00 kubectl=$KUBERNETESVERSION-00
 sudo apt-mark hold kubelet kubeadm kubectl
-sudo chmod ou+r /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+sudo chmod -R ou+r /etc/systemd/system/kubelet.service*
+sudo chmod -R ou+r /lib/systemd/system/kubelet.service*
 sudo systemctl daemon-reload
 sudo systemctl restart kubelet
 sudo systemctl enable kubelet
