@@ -13,11 +13,6 @@ sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/
 mkdir -p ~/"$CLUSTERNAME"
 INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
 
-# this picks up your external facing IP address and hostname
-CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname -f)
-echo "Using $THISHOSTNAME at IP $CONTROLNODEIP"
-
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
 echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
 sleep 5
@@ -45,22 +40,11 @@ bootstrapTokens:
   - signing
   - authentication
 localAPIEndpoint:
-  advertiseAddress: $CONTROLNODEIP
+  advertiseAddress: $CONTROLPLANEENDPOINT
   bindPort: 6443
 nodeRegistration:
   kubeletExtraArgs:
     cloud-provider: external
----
-kind: JoinConfiguration
-apiVersion: kubeadm.k8s.io/v1beta2
-caCertPath: /etc/kubernetes/pki/ca.crt
-discovery:
-  bootstrapToken:
-    apiServerEndpoint: $CONTROLPLANEENDPOINT:6443
-    token: $BOOTSTRAPTOKEN
-    unsafeSkipCAVerification: true
-  timeout: 5m0s
-  tlsBootstrapToken: $BOOTSTRAPTOKEN
 ---
 kind: ClusterConfiguration
 apiVersion: kubeadm.k8s.io/v1beta2
@@ -178,7 +162,7 @@ kubectl apply -f contour.yaml
 
 popd
 
-# allow this node to run workloads, otherwise Istio will not start up.
+# allow this node to run workloads, so we can do single node clusters for testing.
 source ./k8smaker_setcontrolplane $(hostname) schedule
 
-echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP or $(dig +short myip.opendns.com @resolver1.opendns.com), whichever is publicly."
+echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine."

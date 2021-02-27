@@ -29,16 +29,25 @@ PODSUBNET="10.98.0.0/16"
 # This is the username used when SSH'ing into machines
 SSHUSERNAME="ubuntu"
 
-# DO NOT PUT AN IP ADDRESS HERE!  You cannot change this value after creating the cluster.
-# BareMetal: Leave it alone.  The name is added to the /etc/hosts on each node, which allows
-# you to substitute a load balancer IP address on each node if you later need to.
+# Used only with baremetal, this is the IP address that you want to expose as the load balanced IP
+# that you connect to with kubectl (and other nodes will use to talk to the control nodes).  If you
+# want this to be an external IP address, fine.  If you want to always ssh into a cluster node first,
+# pick an IP that is in the SERVICESUBNET.
+#CONTROLPLANEVIP="10.99.0.11"
+CONTROLPLANEVIP="10.0.0.230"
+
+# You cannot change this value after creating the cluster.  So it should always be a name not an IP.
+# BareMetal: Leave it alone.  We patch /etc/hosts to point control-nodes to the CONTROLPLANEVIP.
+# This is the software loade balanced vIP address.  Works fine whether you have 1 or more control nodes.
 # AWS: Put the actual name of your internal control plane load balancer here, if you plan
 # to use one.  Otherwise leave it alone.  You can always come back and sub in the LB's IP address
 # but those sometimes change without notice, so YMMV.
 CONTROLPLANEENDPOINT="control-nodes"
+#CONTROLPLANEENDPOINT="internal-foo-1709887039.us-east-1.elb.amazonaws.com"
 
 # These let you control the versions of packages being installed.  I have no way to guarantee any
 # combination will work except those I have checked in together (which means I tested them myself).
 KUBERNETESVERSION="1.20.4"
 CALICOVERSION="v3.17.3"
 CONTOURVERSION="1.12"
+KUBEVIPVERSION="0.3.2"

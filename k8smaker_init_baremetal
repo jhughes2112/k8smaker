@@ -11,9 +11,7 @@ mkdir -p ~/"$CLUSTERNAME"
 INITSCRIPT=~/"$CLUSTERNAME/kubeadm.yaml"
 
 # this picks up your external facing IP address and hostname
-CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname -f)
-echo "Using $THISHOSTNAME at IP $CONTROLNODEIP"
+EXTINTERFACE=$(ip route get 8.8.8.8 | awk '{print $5}')
 
 # Delete an existing k8s install while leaving Docker alone.  Doesn't get rid of all the extra things we did, but those aren't harmful to reinstalling.
 echo "You have 5 seconds before this script deletes all Kubernetes and Etcd data.  Control-C To Abort!"
@@ -42,7 +40,7 @@ bootstrapTokens:
   - signing
   - authentication
 localAPIEndpoint:
-  advertiseAddress: $CONTROLNODEIP
+  advertiseAddress: $CONTROLPLANEENDPOINT
   bindPort: 6443
 ---
 kind: ClusterConfiguration
@@ -105,6 +103,13 @@ syncFrequency: 0s
 volumeStatsAggPeriod: 0s
 EOF
 
+# Generate the manifest for kube-vip so it can handle load balancing the control node interfaces.
+# This manifest is also added to any future control nodes, which is why it is broken out for easy access.
+sudo docker run --network host --rm plndr/kube-vip:$KUBEVIPVERSION manifest pod --interface $EXTINTERFACE --vip $CONTROLPLANEVIP --controlplane --services --arp --leaderElection | tee ~/"$CLUSTERNAME"/kube-vip.yaml
+sudo mkdir -p /etc/kubernetes/manifests
+sudo cp ~/"$CLUSTERNAME"/kube-vip.yaml /etc/kubernetes/manifests/kube-vip.yaml
+sudo chmod 600 /etc/kubernetes/manifests/kube-vip.yaml
+
 # Actually create the cluster with just the control,etcd on this node, but do so AS root in root's own shell.
 # Otherwise, you get permissions issues in your ~/.kube folder.
 sudo -i kubeadm init --config="$INITSCRIPT" --upload-certs
@@ -145,7 +150,7 @@ kubectl apply -f contour.yaml
 
 popd
 
-# allow this node to run workloads, otherwise Istio will not start up.
+# allow this node to run workloads, so we can do single node clusters for testing.
 source ./k8smaker_setcontrolplane $(hostname) schedule
 
-echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine.  Be sure to change the 'server' line to point to $CONTROLNODEIP"
+echo && echo "You can now use kubectl to work on the cluster, however your group changed so docker commands won't connect until you logout and log back in. To control this k8s cluster remotely, install kubectl and copy down the ~/.kube/config file to your local machine."

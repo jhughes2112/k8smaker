@@ -66,15 +66,17 @@ SEDCMD="sed -i 's%^ExecStart=/usr/bin/dockerd -H fd:// --containerd=/run/contain
 echo "Adding $DATAFOLDER to docker working folder"
 eval "sudo $SEDCMD"
 
-# if there is a way to resolve the $CONTROLPLANEENDPOINT to an ip address, do nothing.  It means /etc/hosts is already 
-# configured or it's a FQDN or something.  Fine.  If not, set an IP address as the target of whatever the string is so
-# resolve it.
+# it has been a problem in the past leaving old values in /etc/host so we explicitly remove those lines if present,
+# then check to see if the hostname still resolves (it may if it's a FQDN handled by a proper DNS server).
+# If not, add it to /etc/hosts
+SEDCMD="sed -i '/$CONTROLPLANEENDPOINT/d' /etc/hosts"
+eval "sudo $SEDCMD"
 RESOLVEDCONTROLIP=$(dig +short "$CONTROLPLANEENDPOINT")
 if [[ ! -z "$RESOLVEDCONTROLIP" ]]; then
    echo "$CONTROLPLANEENDPOINT resolves to $RESOLVEDCONTROLIP already"
 else
-   echo "$CONTROLNODEIP $CONTROLPLANEENDPOINT" | sudo tee -a /etc/hosts >/dev/null
-   echo "Added $CONTROLNODEIP $CONTROLPLANEENDPOINT entry to /etc/hosts"
+   echo "$CONTROLPLANEVIP $CONTROLPLANEENDPOINT" | sudo tee -a /etc/hosts >/dev/null
+   echo "Added $CONTROLPLANEVIP $CONTROLPLANEENDPOINT entry to /etc/hosts"
 fi
 
 # Performance improves if you disable Transparent Huge Pages.

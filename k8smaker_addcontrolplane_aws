@@ -8,7 +8,7 @@ fi
 source ./k8smaker_config
 
 if [[ $1 = '' ]]; then
-   echo "Pass IP or hostname of the control-plane node as the first argument:"
+   echo "Pass IP or hostname of the new control-plane node as the first argument:"
    echo "./k8smaker_addcontrolplane_aws control2.local"
    exit 1
 fi
@@ -18,10 +18,7 @@ ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addcontrolplane_$1"
 KUBEADMSCRIPT=~/"$CLUSTERNAME/k8smaker_addcontrolplane_$1_join.yaml"
 
 # this picks up your external facing IP address and hostname
-CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname -f)
 NEWNODEIP=$(host $1 | tail -1 | awk '{ print $4 }')
-echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
 echo "New control-plane node is $SSHUSERNAME@$1 at IP $NEWNODEIP"
 echo "Script stored in $ADDSCRIPT"
 
@@ -34,7 +31,6 @@ ssh-copy-id -f -i "$HOME/.ssh/$CLUSTERNAME.pub" "$SSHUSERNAME"@"$1"
 
 # generate the script we want to run on the remote machine
 echo "#!/bin/bash" >"$ADDSCRIPT"
-echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
 cat ./k8smaker_config >>"$ADDSCRIPT"
 echo '# AWS nodes must have $(hostname) == $(hostname -f) because somewhere in the middle of initialization, someone is using the short name, and it blows up.' >>"$ADDSCRIPT"
 echo 'sudo hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)' >>"$ADDSCRIPT"
@@ -43,7 +39,7 @@ echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
 echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
 CERTIFICATEKEY=$(sudo kubeadm init phase upload-certs --upload-certs | tail -1)
-echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addcontrolplane_$1_join.yaml --control-plane" >>"$ADDSCRIPT"
+echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addcontrolplane_$1_join.yaml" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
 
 # Generate the kubeadm join script and copy it to the remote machine
@@ -58,10 +54,11 @@ discovery:
     apiServerEndpoint: "${CONTROLPLANEENDPOINT}:6443"
     caCertHashes: ["sha256:${DISCOVERYTOKEN}"]
   timeout: 5m0s
-  tlsBootstrapToken: $BOOTSTRAPTOKEN
+  tlsBootstrapToken: ${BOOTSTRAPTOKEN}
 controlPlane:
   localAPIEndpoint:
-    advertiseAddress: $NEWNODEIP
+    advertiseAddress: ${CONTROLPLANEENDPOINT}
+    bindPort: 6443
   certificateKey: "${CERTIFICATEKEY}"
 nodeRegistration:
   kubeletExtraArgs:

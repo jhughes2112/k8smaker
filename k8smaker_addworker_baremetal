@@ -8,7 +8,7 @@ fi
 source ./k8smaker_config
 
 if [[ $1 = '' ]]; then
-   echo "Pass IP or hostname of the worker node as the first argument:"
+   echo "Pass IP or hostname of the new worker node as the first argument:"
    echo "./k8smaker_addworker_baremetal worker1.local"
    exit 1
 fi
@@ -18,9 +18,6 @@ ADDSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1"
 KUBEADMSCRIPT=~/"$CLUSTERNAME/k8smaker_addworker_$1_join.yaml"
 
 # this picks up your external facing IP address and hostname
-CONTROLNODEIP=$(ip route get 8.8.8.8 | awk '{print $7}')
-THISHOSTNAME=$(hostname -f)
-echo "ControlNode1 is $THISHOSTNAME at IP $CONTROLNODEIP"
 echo "Worker is $SSHUSERNAME@$1"
 echo "Script stored in $ADDSCRIPT"
 
@@ -33,7 +30,6 @@ ssh-copy-id -f -i "$HOME/.ssh/$CLUSTERNAME.pub" "$SSHUSERNAME"@"$1"
 
 # generate the script we want to run on the remote machine
 echo "#!/bin/bash" >"$ADDSCRIPT"
-echo "CONTROLNODEIP=$CONTROLNODEIP" >>"$ADDSCRIPT"
 cat ./k8smaker_config >>"$ADDSCRIPT"
 cat ./k8smaker_precondition >>"$ADDSCRIPT"
 echo "sudo usermod -aG docker $SSHUSERNAME" >>"$ADDSCRIPT"
@@ -54,7 +50,7 @@ discovery:
     apiServerEndpoint: "${CONTROLPLANEENDPOINT}:6443"
     caCertHashes: ["sha256:${DISCOVERYTOKEN}"]
   timeout: 5m0s
-  tlsBootstrapToken: $BOOTSTRAPTOKEN
+  tlsBootstrapToken: ${BOOTSTRAPTOKEN}
 EOF
 
 # copy the scripts to the new node and run it
