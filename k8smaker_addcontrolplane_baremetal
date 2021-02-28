@@ -39,7 +39,8 @@ echo "mkdir -p ~/.kube" >>"$ADDSCRIPT"
 DISCOVERYTOKEN=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | openssl rsa -pubin -outform der 2>/dev/null | openssl dgst -sha256 -hex | sed 's/^.* //')
 CERTIFICATEKEY=$(sudo kubeadm init phase upload-certs --upload-certs | tail -1)
 echo "sudo -i kubeadm join --config=/home/$SSHUSERNAME/k8smaker_addcontrolplane_$1_join.yaml" >>"$ADDSCRIPT"
-echo "sudo docker run --network host --rm plndr/kube-vip:$KUBEVIPVERSION manifest pod --interface $EXTINTERFACE --vip $CONTROLPLANEVIP --controlplane --services --arp --leaderElection | tee kube-vip.yaml" >>"$ADDSCRIPT"
+echo "sudo docker run --network host --rm plndr/kube-vip:$KUBEVIPVERSION manifest pod --interface \$EXTINTERFACE --vip $(dig +short $CONTROLPLANEENDPOINT) --arp --controlplane --leaderElection --lbEnable | tee kube-vip.yaml" >>"$ADDSCRIPT"
+echo "sleep 90" >>"$ADDSCRIPT"
 echo "sudo cp kube-vip.yaml /etc/kubernetes/manifests/kube-vip.yaml" >>"$ADDSCRIPT"
 echo "sudo chmod 600 /etc/kubernetes/manifests/kube-vip.yaml" >>"$ADDSCRIPT"
 chmod a+x "$ADDSCRIPT"
@@ -62,6 +63,11 @@ controlPlane:
     advertiseAddress: ${NEWNODEIP}
     bindPort: 6443
   certificateKey: "${CERTIFICATEKEY}"
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+ipvs:
+  strictARP: true
 EOF
 
 # copy the scripts to the new node and run it
